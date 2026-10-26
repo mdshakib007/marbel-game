@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Marbel — the cave game</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <!-- In-game HUD -->
+    <div id="hud" class="hud hidden">
+      <div class="top-bar">
+        <div class="player-card" id="card-0">
+          <span class="marble-icon"></span>
+          <span class="card-text">
+            <span class="name">You</span>
+            <span class="status"></span>
+          </span>
+          <span class="score">0</span>
+          <span class="badge power" title="Has entered the cave: can flick hard">POWER</span>
+        </div>
+        <div class="turn-banner" id="turn-banner">
+          <span id="turn-text">Your turn</span>
+          <span id="target-text" class="target"></span>
+        </div>
+        <div class="player-card right" id="card-1">
+          <span class="badge power" title="Has entered the cave: can flick hard">POWER</span>
+          <span class="score">0</span>
+          <span class="card-text">
+            <span class="name">Computer</span>
+            <span class="status"></span>
+          </span>
+          <span class="marble-icon"></span>
+        </div>
+      </div>
+
+      <div class="side-buttons">
+        <button id="btn-top" title="Top view (T)">
+          <svg viewBox="0 0 24 24" width="22" height="22"><rect x="4" y="3" width="16" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="9" r="2" fill="currentColor"/><line x1="7" y1="18" x2="17" y2="18" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <button id="btn-sound" title="Sound (M)">
+          <svg id="icon-sound-on" viewBox="0 0 24 24" width="22" height="22"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8a4 4 0 010 8M18.5 5.5a8 8 0 010 13" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <svg id="icon-sound-off" viewBox="0 0 24 24" width="22" height="22" class="hidden"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <button id="btn-menu" title="Menu (Esc)">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="hint" id="hint"></div>
+        <div class="power-wrap" id="power-wrap">
+          <div class="power-meter"><div class="power-fill" id="power-fill"></div></div>
+          <span class="power-label" id="power-label">Weak flick</span>
+        </div>
+        <div class="controls-row">
+          <div class="slider-wrap hidden" id="elevation-wrap">
+            <label for="elev">Lob angle <b id="elev-val">45°</b></label>
+            <input type="range" id="elev" min="15" max="70" value="45" />
+          </div>
+          <div class="slider-wrap hidden" id="handx-wrap">
+            <label for="handx">Position on the line</label>
+            <input type="range" id="handx" min="-1" max="1" step="0.01" value="-0.12" />
+          </div>
+        </div>
+      </div>
+
+      <div id="toasts" class="toasts"></div>
+      <div id="thinking" class="thinking hidden"><span class="dot"></span> Computer is thinking…</div>
+      <div id="minimap-label" class="minimap-label">overhead</div>
+    </div>
+
+    <!-- Setup -->
+    <div id="setup" class="overlay">
+      <div class="panel setup-panel">
+        <h1>Marbel</h1>
+        <p class="sub">The childhood cave game — throw, flick, enter the cave, win the power, knock your rival away.</p>
+
+        <div class="field">
+          <label for="name">Your name</label>
+          <input type="text" id="name" maxlength="14" value="You" />
+        </div>
+
+        <div class="field">
+          <label>Marble size</label>
+          <div class="choices" id="size-choices"></div>
+        </div>
+
+        <div class="field">
+          <label>Marble style</label>
+          <div class="choices" id="style-choices"></div>
+        </div>
+
+        <div class="field">
+          <label>Colour</label>
+          <div class="swatches" id="color-choices"></div>
+        </div>
+
+        <div class="field">
+          <label>Computer opponent</label>
+          <div class="choices" id="level-choices"></div>
+        </div>
+
+        <div class="field">
+          <label>Game end</label>
+          <div class="choices">
+            <label class="choice"><input type="radio" name="mode" value="fun" checked /> <span>Just for fun<small>play until you stop</small></span></label>
+            <label class="choice"><input type="radio" name="mode" value="target" /> <span>First to reach<small><input type="number" id="target" min="1" max="99" value="10" /> points</small></span></label>
+          </div>
+        </div>
+
+        <div class="field inline">
+          <label for="seed">Yard surface</label>
+          <input type="number" id="seed" min="1" max="99999" value="7" />
+          <button type="button" id="seed-random" class="small">New yard</button>
+        </div>
+
+        <button id="btn-start" class="primary">Start game</button>
+        <p class="tiny">Drag back from your marble and release to shoot. Scroll to zoom, drag elsewhere to look around, T for top view.</p>
+      </div>
+    </div>
+
+    <!-- Pause menu -->
+    <div id="menu" class="overlay hidden">
+      <div class="panel">
+        <h2>Paused</h2>
+        <div class="rules">
+          <h3>How to play</h3>
+          <ol>
+            <li>Both players lob their marble from the line at the cave. Closest goes first.</li>
+            <li>Without the <b>power</b> you can only flick weakly. Get your marble into the cave to win the power.</li>
+            <li>With the power you flick hard: knock your rival away from the cave.</li>
+            <li>Any hit scores points by how hard it was (1–4). A hit on a powered rival strips their power and takes 1 point. A hit also earns you another shot.</li>
+            <li>A marble resting inside the cave is safe: touching it scores nothing unless you knock it out of the cave.</li>
+            <li>A hit can — very rarely — shatter a marble. Its owner throws a new one from the line, without the power.</li>
+          </ol>
+        </div>
+        <div class="row">
+          <button id="btn-resume" class="primary">Resume</button>
+          <button id="btn-endgame">End game</button>
+          <button id="btn-newgame">New game</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game over -->
+    <div id="over" class="overlay hidden">
+      <div class="panel">
+        <h2 id="over-title">Game over</h2>
+        <p id="over-sub"></p>
+        <table class="results" id="over-table"></table>
+        <div class="row">
+          <button id="btn-rematch" class="primary">Rematch</button>
+          <button id="btn-over-new">New game</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Debug panel (?debug=1) -->
+    <div id="debug" class="debug hidden">
+      <b>debug</b>
+      <button id="dbg-break">break on next hit</button>
+      <button id="dbg-near">both near cave</button>
+      <button id="dbg-power">give me power</button>
+      <button id="dbg-autoplay">autoplay (AI vs AI)</button>
+      <button id="dbg-slow">slow-mo</button>
+      <pre id="dbg-out"></pre>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
