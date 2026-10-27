@@ -82,7 +82,7 @@ export class Effects {
 
   /** Dirt kicked up by a landing or a hard roll. strength in [0,1]. */
   dustPuff(x, y, z, strength = 0.5, count = 14) {
-    const n = Math.round(count * (0.4 + strength));
+    const n = Math.round(count * (0.4 + strength) * (Effects.particleScale || 1));
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = (0.04 + Math.random() * 0.22) * (0.4 + strength);
@@ -124,6 +124,11 @@ export class Effects {
     }
   }
 
+  /** True while shards (which cast shadows) are flying. */
+  get active() {
+    return this.shards.length > 0;
+  }
+
   /** The marble explodes into glass shards. */
   shatter(x, y, z, colorHex, radius) {
     const n = 22;
@@ -133,8 +138,7 @@ export class Effects {
         roughness: 0.1,
         clearcoat: 1,
         transparent: true,
-        opacity: 0.95,
-        transmission: 0.3,
+        opacity: 0.9,
       });
       const m = new THREE.Mesh(this.shardGeo, mat);
       const s = radius * (0.18 + Math.random() * 0.3);

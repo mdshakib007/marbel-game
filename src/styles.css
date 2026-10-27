@@ -581,25 +581,141 @@ button.primary:hover {
   overflow: auto;
 }
 
+/* ---------- phones ---------- */
 @media (max-width: 720px) {
+  .top-bar {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    gap: 8px;
+  }
   .player-card {
     min-width: 0;
     padding: 6px 10px;
+    gap: 7px;
+    border-radius: 12px;
+  }
+  .player-card .status {
+    display: none;
+  }
+  .player-card .name {
+    font-size: 13px;
   }
   .player-card .score {
     font-size: 20px;
   }
+  .player-card .marble-icon {
+    width: 22px;
+    height: 22px;
+  }
+  .badge {
+    font-size: 9px;
+    padding: 2px 5px;
+  }
   .side-buttons {
     top: auto;
-    bottom: 160px;
+    right: 8px;
+    bottom: 150px;
     transform: none;
+    gap: 6px;
+  }
+  .side-buttons button {
+    width: 38px;
+    height: 38px;
+  }
+  .bottom-bar {
+    bottom: 8px;
+    width: calc(100vw - 16px);
+    gap: 6px;
+  }
+  .hint {
+    font-size: 12px;
+    padding: 6px 10px;
+    min-height: 0;
+  }
+  .power-wrap {
+    padding: 6px 10px;
+  }
+  .power-label {
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .thinking {
+    font-size: 12px;
+  }
+  .toasts {
+    top: 64px;
+  }
+  .toast {
+    font-size: 12px;
   }
   .overlay {
     justify-content: center;
     background: rgba(10, 8, 6, 0.7);
+    padding: 12px;
+  }
+  .panel {
+    padding: 16px 16px 18px;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+  .rules {
+    font-size: 12px;
   }
   .minimap-label {
     display: none;
+  }
+}
+
+/* Phone held upright: the marble shows on top, the setup sheet slides up
+   from the bottom. */
+@media (max-width: 720px) and (orientation: portrait) {
+  #setup {
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0;
+    background: linear-gradient(180deg, transparent 30%, rgba(10, 8, 6, 0.75) 60%);
+  }
+  #setup .setup-panel {
+    width: 100%;
+    max-height: 62vh;
+    max-height: 62dvh;
+    border-radius: 18px 18px 0 0;
+    border-bottom: 0;
+    padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+  }
+  #setup .setup-panel h1 {
+    font-size: 22px;
+  }
+  .setup-panel .field {
+    margin-bottom: 7px;
+  }
+  .setup-panel .field.inline > label {
+    min-width: 84px;
+  }
+}
+
+/* Phone on its side: everything is short, so shrink the sheet instead. */
+@media (max-height: 480px) {
+  #setup {
+    padding: 8px;
+  }
+  #setup .setup-panel {
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    padding: 10px 14px 12px;
+  }
+  .setup-panel .field {
+    margin-bottom: 5px;
+  }
+  .setup-panel h1 {
+    font-size: 20px;
+  }
+  .side-buttons {
+    bottom: auto;
+    top: 50%;
+    transform: translateY(-50%);
   }
 }
 

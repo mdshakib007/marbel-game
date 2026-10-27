@@ -7,7 +7,8 @@ import { Terrain } from './terrain.js';
 import { Game } from './game.js';
 import { planShot } from './ai.js';
 import { LAYER_MINIMAP, buildScene, createRenderer, fadeWalls } from './render/scene.js';
-import { MarbleView } from './render/marbles.js';
+import { MARBLE_RENDER, MarbleView } from './render/marbles.js';
+import { AdaptiveResolution, detectQuality } from './render/quality.js';
 import { Effects } from './render/effects.js';
 import { AimGuide } from './render/aim.js';
 import { CameraRig } from './render/camera.js';
@@ -21,8 +22,19 @@ const DEBUG = new URLSearchParams(location.search).has('debug');
 class App {
   constructor() {
     this.canvas = document.getElementById('scene');
-    this.renderer = createRenderer(this.canvas);
+    this.quality = detectQuality();
+    MARBLE_RENDER.transmission = this.quality.transmission;
+    MARBLE_RENDER.segments = this.quality.sphereSegments;
+    Effects.particleScale = this.quality.particles;
+    this.renderer = createRenderer(this.canvas, this.quality);
+    // Shadows are redrawn only when something that casts one has moved.
     this.renderer.shadowMap.autoUpdate = false;
+    this.shadowDirty = true;
+    this.shadowTimer = 0;
+    this.frameNo = 0;
+    this.minimapRT = null;
+    this.minimapQuad = null;
+    this.lastPositions = new Map();
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.004, 90);
     this.ui = new UI();
     this.audio = new AudioEngine();
@@ -46,6 +58,7 @@ class App {
     this._wireUI();
     this._wireInput();
 
+    this.resolution = new AdaptiveResolution(this.renderer, this.quality);
     window.addEventListener('resize', () => this._resize());
     this._resize();
     this.ui.setSoundMuted(this.audio.muted);
@@ -71,10 +84,12 @@ class App {
     }
     this.seed = seed;
     this.terrain = new Terrain({ seed });
-    const parts = buildScene(this.renderer, this.terrain);
+    const parts = buildScene(this.renderer, this.terrain, this.quality);
     this.scene = parts.scene;
     this.minimap = parts.minimap;
     this.walls = parts.walls;
+    this.shadowDirty = true;
+    this.minimapDirty = true;
     this.effects = new Effects(this.scene, this.terrain);
     this.aim = new AimGuide(this.scene, this.terrain);
     if (this.rig) this.rig.terrain = this.terrain;
@@ -83,9 +98,18 @@ class App {
   _resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    this.renderer.setSize(w, h, false);
+    if (this.resolution) this.resolution.apply();
+    else this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.shadowDirty = true;
+    this.minimapDirty = true;
+    if (this.state === 'setup') this._updatePreview(this.ui.setupValues(), true);
+  }
+
+  /** Phones held upright: the setup panel sits at the bottom, the marble above it. */
+  get portrait() {
+    return window.innerHeight > window.innerWidth && window.innerWidth < 720;
   }
 
   // ------------------------------------------------------------ setup
@@ -122,12 +146,17 @@ class App {
       this.previewView.key = key;
       this.previewView.addTo(this.scene);
     }
-    const x = 0.35;
+    const x = this.portrait ? 0.1 : 0.35;
     const z = START_LINE.z - 0.15;
     const y = this.terrain.surfaceForRadius(x, z, size.radius, { h: 0 }).h;
     this.previewView.setPosition(x, y, z);
     this.rig.setTopView(false);
-    this.rig.frame({ x, y, z }, { x: x - 0.4, z: z - 1.2 }, { dist: size.radius * 9 + 0.03, pitch: 0.32, immediate });
+    const dist = size.radius * 9 + 0.03;
+    // In portrait the panel covers the lower part of the screen: aim the
+    // camera a little below the marble so the marble sits in the top third.
+    const look = this.portrait ? { x, y: y - dist * 0.42, z } : { x, y, z };
+    this.rig.frame(look, { x: look.x - (this.portrait ? 0 : 0.4), z: z - 1.2 }, { dist, pitch: 0.32, immediate });
+    this.shadowDirty = true;
   }
 
   _startGame(values) {
@@ -517,7 +546,22 @@ class App {
 
   // ------------------------------------------------------------ frame
 
+  /** Nothing moves: no shot, no lift, no aiming, no AI, camera settled, no particles. */
+  _isIdle() {
+    const g = this.game;
+    if (this.input.aiming || this.ai || this.effects.active) return false;
+    if (g && (g.phase === 'shot' || g.phase === 'placing')) return false;
+    if (g && g.canShoot() && g.activePlayer.inHand) return false; // the hand bobs
+    const r = this.rig;
+    const far = r.target.distanceTo(r.desired.target) > 2e-4 || Math.abs(r.dist - r.desired.dist) > 2e-4 || Math.abs(r.pitch - r.desired.pitch) > 1e-3 || Math.abs(r.yaw - r.desired.yaw) > 1e-3;
+    return !far;
+  }
+
   _frame() {
+    // Power saving: with nothing moving, draw every other frame (the
+    // pulsing ring and the spinning preview marble do not need 60 fps).
+    this.frameNo++;
+    if (this._isIdle() && this.frameNo % 2) return;
     let dt = Math.min(this.clock.getDelta(), 0.05);
     if (this.slowMo) dt *= 0.2;
     const aspect = this.camera.aspect;
@@ -537,7 +581,14 @@ class App {
     this.aim.update(dt);
     this.effects.update(dt);
     this.rig.update(dt, aspect);
-    fadeWalls(this.walls, this.camera.position, this.rig.target, dt);
+    if (fadeWalls(this.walls, this.camera.position, this.rig.target, dt)) this.shadowDirty = true;
+    if (this.effects.active) this.shadowDirty = true;
+    this.shadowTimer += dt;
+    if (this.shadowTimer > 1) {
+      this.shadowDirty = true;
+      this.shadowTimer = 0;
+    }
+    this.resolution.update(performance.now());
     this._render();
   }
 
@@ -548,6 +599,7 @@ class App {
       const m = p.marble;
       if (m.active) {
         v.setVisible(true);
+        this._noteMoved(p.index, m.x, m.y, m.z);
         if (game.placing && game.placing.player === p) {
           const pl = game.placing;
           const t = Math.min(1, pl.t / pl.duration);
@@ -566,10 +618,25 @@ class App {
         v.setVisible(true);
         v.setPosition(h.x, h.y + bob, h.z);
         v.spin(dt, 0.8);
+        this._noteMoved(p.index, h.x, h.y + bob, h.z);
       } else {
+        if (this.lastPositions.has(p.index)) {
+          this.lastPositions.delete(p.index);
+          this.shadowDirty = true;
+          this.minimapDirty = true;
+        }
         v.setVisible(false);
       }
     }
+  }
+
+  /** Mark shadows and the mini-map stale when a marble has actually moved. */
+  _noteMoved(key, x, y, z) {
+    const last = this.lastPositions.get(key);
+    if (last && Math.abs(last.x - x) < 1e-5 && Math.abs(last.y - y) < 1e-5 && Math.abs(last.z - z) < 1e-5) return;
+    this.lastPositions.set(key, { x, y, z });
+    this.shadowDirty = true;
+    this.minimapDirty = true;
   }
 
   /** While marbles move, keep the camera on the fastest one (the action). */
@@ -609,27 +676,58 @@ class App {
     const r = this.renderer;
     const w = this.canvas.clientWidth || window.innerWidth;
     const h = this.canvas.clientHeight || window.innerHeight;
-    r.shadowMap.needsUpdate = true;
+    r.shadowMap.needsUpdate = this.shadowDirty;
+    this.shadowDirty = false;
     r.setScissorTest(false);
     r.setViewport(0, 0, w, h);
     r.render(this.scene, this.camera);
+    if (this.state === 'playing' && this.game) this._renderMinimap(w, h);
+  }
 
-    if (this.state === 'playing' && this.game) {
-      const mm = this.minimap;
-      const narrow = w < 720;
-      const mw = Math.round(Math.min(150, w * (narrow ? 0.17 : 0.2)));
-      const mh = Math.round(mw * (mm.height / mm.width));
-      // bottom-right normally; top-left under the score card on phones so it
-      // does not sit on the hint and the sliders
-      const mx = narrow ? 12 : w - mw - 14;
-      const my = narrow ? h - 70 - mh : 30;
-      r.setScissorTest(true);
-      r.setViewport(mx, my, mw, mh);
-      r.setScissor(mx, my, mw, mh);
-      r.render(this.scene, mm.camera);
-      r.setScissorTest(false);
-      r.setViewport(0, 0, w, h);
+  /**
+   * The mini-map is drawn into a small texture only when a marble has moved
+   * (and at most every few frames), then blitted each frame: far cheaper
+   * than rendering the whole yard a second time per frame.
+   */
+  _renderMinimap(w, h) {
+    const r = this.renderer;
+    const mm = this.minimap;
+    const narrow = w < 720;
+    const mw = Math.round(Math.min(150, w * (narrow ? 0.2 : 0.2)));
+    const mh = Math.round(mw * (mm.height / mm.width));
+    const mx = narrow ? 10 : w - mw - 14;
+    const my = narrow ? h - 150 - mh : 30;
+    const scale = Math.min(2, this.resolution.ratio);
+    const tw = Math.round(mw * scale);
+    const th = Math.round(mh * scale);
+    if (!this.minimapRT || this.minimapRT.width !== tw || this.minimapRT.height !== th) {
+      if (this.minimapRT) this.minimapRT.dispose();
+      this.minimapRT = new THREE.WebGLRenderTarget(tw, th, { depthBuffer: true });
+      this.minimapRT.texture.colorSpace = THREE.SRGBColorSpace;
+      if (!this.minimapQuad) {
+        this.minimapQuad = {
+          scene: new THREE.Scene(),
+          camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
+          mesh: new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: this.minimapRT.texture, toneMapped: false })),
+        };
+        this.minimapQuad.scene.add(this.minimapQuad.mesh);
+      } else {
+        this.minimapQuad.mesh.material.map = this.minimapRT.texture;
+      }
+      this.minimapDirty = true;
     }
+    if (this.minimapDirty && this.frameNo % this.quality.minimapEvery === 0) {
+      this.minimapDirty = false;
+      r.setRenderTarget(this.minimapRT);
+      r.render(this.scene, mm.camera);
+      r.setRenderTarget(null);
+    }
+    r.setScissorTest(true);
+    r.setViewport(mx, my, mw, mh);
+    r.setScissor(mx, my, mw, mh);
+    r.render(this.minimapQuad.scene, this.minimapQuad.camera);
+    r.setScissorTest(false);
+    r.setViewport(0, 0, w, h);
   }
 
   // ------------------------------------------------------------ debug
@@ -675,6 +773,7 @@ class App {
     }
     if (this.ai) lines.push(`ai: ${this.ai.result ? 'planned ' + JSON.stringify({ p: +this.ai.result.power.toFixed(2), el: this.ai.result.elevation, n: this.ai.result.considered, tag: this.ai.result.planned.tag, best: +this.ai.result.best.score.toFixed(1) }) : 'thinking'}`);
     lines.push(`cam yaw ${this.rig.yaw.toFixed(2)} pitch ${this.rig.pitch.toFixed(2)} dist ${this.rig.dist.toFixed(2)} top ${this.rig.topView}`);
+    lines.push(`quality ${this.quality.key} dpr ${this.resolution.ratio.toFixed(2)} fps ${this.resolution.fps.toFixed(0)} shadow ${this.quality.shadowMapSize}`);
     this.ui.setDebugText(lines.join('\n'));
   }
 }

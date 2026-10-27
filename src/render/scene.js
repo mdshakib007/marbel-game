@@ -10,18 +10,18 @@ import { makeBrickTexture, makeDirtNormalMap, makeDirtTexture, makeGrassTexture 
 export const LAYER_MAIN = 0;
 export const LAYER_MINIMAP = 1;
 
-export function createRenderer(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+export function createRenderer(canvas, quality) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.antialias, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.maxPixelRatio));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = quality.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   return renderer;
 }
 
-export function buildScene(renderer, terrain) {
+export function buildScene(renderer, terrain, quality) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xa9d4f2);
   scene.fog = new THREE.Fog(0xc9e3f4, 8, 40);
@@ -33,6 +33,7 @@ export function buildScene(renderer, terrain) {
 
   // --- lights -------------------------------------------------------------
   const hemi = new THREE.HemisphereLight(0xd6e9ff, 0x7a5a3a, 0.7);
+  hemi.layers.enable(LAYER_MINIMAP); // lights must be on every layer a camera draws
   scene.add(hemi);
 
   // A lowish afternoon sun: raking light shows the humps and hollows of the
@@ -41,7 +42,7 @@ export function buildScene(renderer, terrain) {
   sun.position.set(2.6, 2.7, 1.4);
   sun.target.position.set(0, 0, 0.6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
   const sc = sun.shadow.camera;
   sc.left = -2.8;
   sc.right = 2.8;
@@ -52,6 +53,7 @@ export function buildScene(renderer, terrain) {
   sun.shadow.bias = -0.00004;
   sun.shadow.normalBias = 0.0025;
   sun.shadow.radius = 1.5;
+  sun.layers.enable(LAYER_MINIMAP);
   scene.add(sun);
   scene.add(sun.target);
 
@@ -87,15 +89,19 @@ export function buildScene(renderer, terrain) {
   scene.add(lawn);
 
   // --- dirt terrain -------------------------------------------------------
-  const terrainMesh = buildTerrainMesh(terrain);
+  const terrainMesh = buildTerrainMesh(terrain, quality.terrainNX, quality.terrainNZ);
+  terrainMesh.layers.enable(LAYER_MINIMAP);
   scene.add(terrainMesh);
 
   // --- brick walls --------------------------------------------------------
   const walls = buildWalls();
+  for (const w of walls.children) w.layers.enable(LAYER_MINIMAP);
   scene.add(walls);
 
   // --- chalk start line ---------------------------------------------------
-  scene.add(buildStartLine(terrain));
+  const startLine = buildStartLine(terrain);
+  startLine.layers.enable(LAYER_MINIMAP);
+  scene.add(startLine);
 
   // --- mini-map camera & markers -----------------------------------------
   const minimap = buildMinimap();
@@ -109,9 +115,7 @@ function warp(t, a = 0.22) {
 }
 
 /** Dense near the cave, coarse at the edges: a warped grid. */
-export function buildTerrainMesh(terrain) {
-  const NX = 320;
-  const NZ = 400;
+export function buildTerrainMesh(terrain, NX = 320, NZ = 400) {
   const positions = new Float32Array(NX * NZ * 3);
   const colors = new Float32Array(NX * NZ * 3);
   const uvs = new Float32Array(NX * NZ * 2);
@@ -225,6 +229,7 @@ function buildWalls() {
  */
 export function fadeWalls(walls, camPos, target, dt) {
   const top = FIELD.wallHeight;
+  let shadowChanged = false;
   for (const wall of walls.children) {
     const side = wall.userData.side;
     let want = 0;
@@ -249,8 +254,13 @@ export function fadeWalls(walls, camPos, target, dt) {
     }
     wall.material.opacity = 1 - 0.8 * fade;
     wall.material.depthWrite = fade < 0.5;
-    wall.castShadow = fade < 0.5;
+    const cast = fade < 0.5;
+    if (wall.castShadow !== cast) {
+      wall.castShadow = cast;
+      shadowChanged = true;
+    }
   }
+  return shadowChanged;
 }
 
 function buildStartLine(terrain) {
@@ -289,7 +299,9 @@ function buildMinimap() {
   camera.position.set(0, 8, (FIELD.zMin + FIELD.zMax) / 2);
   camera.up.set(0, 0, -1);
   camera.lookAt(0, 0, (FIELD.zMin + FIELD.zMax) / 2);
-  camera.layers.enable(LAYER_MINIMAP);
+  // The mini-map draws only the yard and the markers (not marbles, sky,
+  // lawn or effects): everything it needs is also on LAYER_MINIMAP.
+  camera.layers.set(LAYER_MINIMAP);
 
   const markers = new THREE.Group();
   const cave = new THREE.Mesh(

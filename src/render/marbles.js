@@ -13,6 +13,9 @@ function cachedTexture(key, make) {
   return textureCache.get(key);
 }
 
+/** Rendering options shared by every marble (set once from the quality tier). */
+export const MARBLE_RENDER = { transmission: true, segments: [48, 32] };
+
 export class MarbleView {
   constructor({ radius, style = 'catseye', color = 'blue', seed = 1 }) {
     this.radius = radius;
@@ -26,22 +29,34 @@ export class MarbleView {
     this.visible = true;
 
     const r = radius;
-    const geo = new THREE.SphereGeometry(r, 48, 32);
+    const [segW, segH] = MARBLE_RENDER.segments;
+    const geo = new THREE.SphereGeometry(r, segW, segH);
     const col = new THREE.Color(this.colorHex);
+    const glass = MARBLE_RENDER.transmission;
     let mat;
     switch (style) {
       case 'clear': {
-        mat = new THREE.MeshPhysicalMaterial({
-          color: col.clone().lerp(new THREE.Color(0xffffff), 0.55),
-          transmission: 1,
-          thickness: r * 1.2,
-          roughness: 0.03,
-          ior: 1.5,
-          attenuationColor: col.clone().lerp(new THREE.Color(0xffffff), 0.25),
-          attenuationDistance: r * 5,
-          specularIntensity: 1,
-          envMapIntensity: 1.2,
-        });
+        mat = glass
+          ? new THREE.MeshPhysicalMaterial({
+              color: col.clone().lerp(new THREE.Color(0xffffff), 0.55),
+              transmission: 1,
+              thickness: r * 1.2,
+              roughness: 0.03,
+              ior: 1.5,
+              attenuationColor: col.clone().lerp(new THREE.Color(0xffffff), 0.25),
+              attenuationDistance: r * 5,
+              specularIntensity: 1,
+              envMapIntensity: 1.2,
+            })
+          : // cheap glass: a tinted, glossy, half-transparent shell
+            new THREE.MeshStandardMaterial({
+              color: col.clone().lerp(new THREE.Color(0xffffff), 0.3),
+              transparent: true,
+              opacity: 0.72,
+              roughness: 0.05,
+              metalness: 0.1,
+              envMapIntensity: 1.3,
+            });
         break;
       }
       case 'bot': {
@@ -98,17 +113,28 @@ export class MarbleView {
       }
       case 'catseye':
       default: {
-        mat = new THREE.MeshPhysicalMaterial({
-          color: 0xffffff,
-          transmission: 1,
-          thickness: r * 1.0,
-          roughness: 0.02,
-          ior: 1.5,
-          attenuationColor: new THREE.Color(0xf6f9ff),
-          attenuationDistance: r * 12,
-          specularIntensity: 1,
-          envMapIntensity: 1.2,
-        });
+        mat = glass
+          ? new THREE.MeshPhysicalMaterial({
+              color: 0xffffff,
+              transmission: 1,
+              thickness: r * 1.0,
+              roughness: 0.02,
+              ior: 1.5,
+              attenuationColor: new THREE.Color(0xf6f9ff),
+              attenuationDistance: r * 12,
+              specularIntensity: 1,
+              envMapIntensity: 1.2,
+            })
+          : // cheap glass: a faintly tinted glossy shell over the coloured vanes
+            new THREE.MeshStandardMaterial({
+              color: col.clone().lerp(new THREE.Color(0xffffff), 0.3),
+              transparent: true,
+              opacity: 0.38,
+              roughness: 0.04,
+              metalness: 0.1,
+              envMapIntensity: 2,
+              depthWrite: false,
+            });
         // three thin coloured vanes meeting along one axis: the 'eye'
         const vaneMat = new THREE.MeshPhysicalMaterial({
           color: col,
@@ -116,11 +142,12 @@ export class MarbleView {
           roughness: 0.45,
           clearcoat: 0.6,
         });
-        const vaneGeo = new THREE.SphereGeometry(1, 24, 12);
+        const vaneGeo = new THREE.SphereGeometry(1, glass ? 24 : 14, glass ? 12 : 8);
+        const vaneScale = glass ? 1 : 1.32; // nearly fills the cheap shell
         const eye = new THREE.Group();
         for (let i = 0; i < 3; i++) {
           const vane = new THREE.Mesh(vaneGeo, vaneMat);
-          vane.scale.set(r * 0.68, r * 0.62, r * 0.085);
+          vane.scale.set(r * 0.68 * vaneScale, r * 0.62 * vaneScale, r * 0.085 * vaneScale);
           vane.rotation.y = (i * Math.PI) / 3;
           eye.add(vane);
         }

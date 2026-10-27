@@ -130,6 +130,19 @@ the two can never be confused.
   ahead of it and backing off with speed, so a hard hit and the marble it
   sends flying stay in view.
 
+## Performance
+
+The game picks a rendering tier for the device (`src/render/quality.js`):
+phones, machines with 4 GB or less, few cores or a weak GPU get the **low**
+tier (no refraction, 1024 px hard shadows, a coarser terrain mesh, fewer
+particles, pixel ratio at most 1.5), everything else **high** (refractive
+glass, 2048 px soft shadows, pixel ratio at most 2). On top of that the
+render resolution adapts to the measured frame rate, shadows are redrawn
+only when something has moved, the mini-map is drawn into a small texture
+only when a marble moves, and when nothing moves the game draws every other
+frame. Force a tier with `?quality=low` or `?quality=high`; the debug panel
+(`?debug=1`) shows the tier, pixel ratio and frame rate.
+
 ## Project layout
 
 ```
