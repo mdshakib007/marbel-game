@@ -597,6 +597,73 @@ button.primary:hover {
   }
 }
 
+/* ---------- compact setup panel ---------- */
+.setup-panel {
+  padding: 14px 18px 16px;
+  width: min(430px, 100%);
+}
+.setup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.setup-panel h1 {
+  margin: 0;
+  font-size: 26px;
+}
+.setup-head .lang-switch {
+  position: static;
+}
+.setup-panel .field {
+  margin-bottom: 8px;
+}
+.setup-panel .field > label {
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.setup-panel .field.inline > label {
+  flex: 0 0 auto;
+  min-width: 96px;
+}
+.setup-panel .field.inline input[type="text"] {
+  flex: 1;
+  padding: 5px 9px;
+  font-size: 13px;
+}
+.setup-panel .field.inline input[type="number"] {
+  width: 72px;
+  padding: 5px 8px;
+  font-size: 13px;
+}
+.setup-panel .choices {
+  gap: 5px;
+}
+.setup-panel .choice {
+  padding: 3px 8px;
+  font-size: 12px;
+  border-radius: 8px;
+  gap: 5px;
+}
+.setup-panel .choice input[type="number"] {
+  width: 44px;
+  padding: 1px 5px;
+  font-size: 12px;
+  margin: 0 2px;
+}
+.setup-panel .swatches {
+  gap: 6px;
+}
+.setup-panel .swatch {
+  width: 24px;
+  height: 24px;
+}
+.setup-panel button.primary {
+  padding: 9px 14px;
+  font-size: 15px;
+  margin-top: 4px;
+}
+
 /* ---------- language switch ---------- */
 .lang-switch {
   position: absolute;

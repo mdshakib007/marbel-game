@@ -95,7 +95,7 @@ export class UI {
     for (const s of Object.values(MARBLE_SIZES)) {
       sizes.insertAdjacentHTML(
         'beforeend',
-        `<label class="choice"><input type="radio" name="size" value="${s.key}" ${s.key === size ? 'checked' : ''}/> <span>${t(`size.${s.key}`)}<small>${t(`size.${s.key}.note`)}</small></span></label>`,
+        `<label class="choice"><input type="radio" name="size" value="${s.key}" ${s.key === size ? 'checked' : ''}/> <span>${t(`size.${s.key}`)}</span></label>`,
       );
     }
     const styles = $('style-choices');
@@ -103,7 +103,7 @@ export class UI {
     for (const s of Object.values(MARBLE_STYLES)) {
       styles.insertAdjacentHTML(
         'beforeend',
-        `<label class="choice"><input type="radio" name="style" value="${s.key}" ${s.key === style ? 'checked' : ''}/> <span>${t(`style.${s.key}`)}<small>${t(`style.${s.key}.note`)}</small></span></label>`,
+        `<label class="choice"><input type="radio" name="style" value="${s.key}" ${s.key === style ? 'checked' : ''}/> <span>${t(`style.${s.key}`)}</span></label>`,
       );
     }
     const colors = $('color-choices');

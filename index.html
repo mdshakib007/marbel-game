@@ -71,14 +71,15 @@
     <!-- Setup -->
     <div id="setup" class="overlay">
       <div class="panel setup-panel">
-        <div class="lang-switch" data-lang-switch>
-          <button type="button" data-lang="en" data-i18n="lang.en">English</button>
-          <button type="button" data-lang="bn" data-i18n="lang.bn">বাংলা</button>
+        <div class="setup-head">
+          <h1 data-i18n="setup.title">Marbel</h1>
+          <div class="lang-switch" data-lang-switch>
+            <button type="button" data-lang="en" data-i18n="lang.en">English</button>
+            <button type="button" data-lang="bn" data-i18n="lang.bn">বাংলা</button>
+          </div>
         </div>
-        <h1 data-i18n="setup.title">Marbel</h1>
-        <p class="sub" data-i18n="setup.sub">The childhood cave game — throw, flick, enter the cave, win the power, knock your rival away.</p>
 
-        <div class="field">
+        <div class="field inline">
           <label for="name" data-i18n="setup.name">Your name</label>
           <input type="text" id="name" maxlength="14" value="You" />
         </div>
@@ -106,8 +107,8 @@
         <div class="field">
           <label data-i18n="setup.end">Game end</label>
           <div class="choices">
-            <label class="choice"><input type="radio" name="mode" value="fun" checked /> <span><span data-i18n="setup.fun">Just for fun</span><small data-i18n="setup.funNote">play until you stop</small></span></label>
-            <label class="choice"><input type="radio" name="mode" value="target" /> <span><span data-i18n="setup.target">First to reach</span><small><input type="number" id="target" min="1" max="99" value="10" /> <span data-i18n="setup.targetNote">points</span></small></span></label>
+            <label class="choice"><input type="radio" name="mode" value="fun" checked /> <span data-i18n="setup.fun">Just for fun</span></label>
+            <label class="choice"><input type="radio" name="mode" value="target" /> <span><span data-i18n="setup.target">First to</span> <input type="number" id="target" min="1" max="99" value="10" /> <span data-i18n="setup.targetNote">points</span></span></label>
           </div>
         </div>
 
@@ -118,7 +119,6 @@
         </div>
 
         <button id="btn-start" class="primary" data-i18n="setup.start">Start game</button>
-        <p class="tiny" data-i18n="setup.tiny">Drag back from your marble and release to shoot. Scroll to zoom, drag elsewhere to look around, T for top view.</p>
       </div>
     </div>
 
