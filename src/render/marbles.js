@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { MARBLE_COLORS } from '../config.js';
-import { makeGalaxyTexture, makeOpalTexture, makeSwirlTexture } from './textures.js';
+import { makeBotTexture, makeGalaxyTexture, makeOpalTexture, makeSwirlTexture } from './textures.js';
 import { makeMinimapMarker } from './scene.js';
 
 const textureCache = new Map();
@@ -41,6 +41,18 @@ export class MarbleView {
           attenuationDistance: r * 5,
           specularIntensity: 1,
           envMapIntensity: 1.2,
+        });
+        break;
+      }
+      case 'bot': {
+        // the computer's marble: black glass, white bands, mirror gloss
+        const tex = cachedTexture('bot', () => makeBotTexture(seed));
+        mat = new THREE.MeshPhysicalMaterial({
+          map: tex,
+          roughness: 0.1,
+          clearcoat: 1,
+          clearcoatRoughness: 0.03,
+          envMapIntensity: 1.3,
         });
         break;
       }
@@ -125,7 +137,8 @@ export class MarbleView {
 
     // A fake contact shadow helps the marble read as 'on the ground' under
     // soft lighting (the real shadow map adds the directional one).
-    this.marker = makeMinimapMarker(this.colorHex);
+    // On the mini-map the computer's marble is a black dot in a white ring.
+    this.marker = makeMinimapMarker(style === 'bot' ? 0x111111 : this.colorHex);
   }
 
   addTo(scene) {

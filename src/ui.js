@@ -109,6 +109,7 @@ export class UI {
     const colors = $('color-choices');
     colors.innerHTML = '';
     for (const c of Object.values(MARBLE_COLORS)) {
+      if (c.hidden) continue;
       colors.insertAdjacentHTML(
         'beforeend',
         `<button type="button" class="swatch ${c.key === color ? 'on' : ''}" data-color="${c.key}" title="${t(`color.${c.key}`)}" style="--c:${hexCss(c.hex)}"></button>`,
@@ -253,7 +254,7 @@ export class UI {
     const rows = players
       .map(
         (p) => `<tr class="${p === winner ? 'winner' : ''}">
-          <td><span class="marble-icon" style="--c:${hexCss(MARBLE_COLORS[p.color].hex)}; display:inline-block; width:14px; height:14px; border-radius:50%; margin-right:6px; vertical-align:-2px"></span>${escapeHtml(this.nameOf(p))}</td>
+          <td><span class="marble-icon ${p.style === 'bot' ? 'bot' : ''}" style="--c:${hexCss(MARBLE_COLORS[p.color].hex)}; display:inline-block; width:14px; height:14px; border-radius:50%; margin-right:6px; vertical-align:-2px"></span>${escapeHtml(this.nameOf(p))}</td>
           <td><b>${p.score}</b></td><td>${p.hits}</td><td>${p.caveEntries}</td><td>${p.marblesBroken}</td></tr>`,
       )
       .join('');
@@ -271,7 +272,9 @@ export class UI {
     players.forEach((p, i) => {
       const card = this.el.cards[i];
       card.querySelector('.name').textContent = this.nameOf(p);
-      card.querySelector('.marble-icon').style.setProperty('--c', hexCss(MARBLE_COLORS[p.color].hex));
+      const icon = card.querySelector('.marble-icon');
+      icon.style.setProperty('--c', hexCss(MARBLE_COLORS[p.color].hex));
+      icon.classList.toggle('bot', p.style === 'bot');
     });
   }
 

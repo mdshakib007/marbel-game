@@ -153,7 +153,15 @@ export const MARBLE_STYLES = {
   opal: { key: 'opal', label: 'Opal', note: 'milky, shimmering' },
 };
 
+/**
+ * The computer's marble: glossy black glass with bold white bands. It is not
+ * on the player's menu, so the two marbles can never look alike.
+ */
+export const BOT_MARBLE = { style: 'bot', color: 'bot' };
+
 export const MARBLE_COLORS = {
+  /** hidden: not offered to the player; the hex colours the aim ring, HUD icon and shards */
+  bot: { key: 'bot', label: 'Black & white', hex: 0xf2f2f2, hidden: true },
   red: { key: 'red', label: 'Red', hex: 0xe03a2f },
   blue: { key: 'blue', label: 'Blue', hex: 0x2f6fe0 },
   green: { key: 'green', label: 'Green', hex: 0x2fb35a },

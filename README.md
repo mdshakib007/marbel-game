@@ -27,6 +27,21 @@ Add `?debug=1` to the URL for a debug panel (force a marble to break on the
 next hit, teleport both marbles next to the cave, give yourself the power,
 let the computer play both sides, slow motion).
 
+## Deploy to Vercel
+
+The game is a static Vite site, so Vercel needs no configuration beyond the
+included `vercel.json` (framework Vite, `npm run build`, output `dist/`).
+
+- **From GitHub:** on vercel.com choose *Add New → Project*, import this
+  repository, keep the detected settings and press *Deploy*. Every push to
+  `main` then redeploys automatically.
+- **From the terminal:** `npx vercel` (first time: log in and accept the
+  defaults), then `npx vercel --prod` for the production URL.
+
+Nothing else is required: there is no server, no database and no
+environment variable. The Bangla/English auto-detection calls ipwho.is from
+the browser over HTTPS, which works on a Vercel domain.
+
 ## How to play
 
 1. **Opening** — both players lob their marble from the chalk line at the
@@ -81,9 +96,11 @@ view fades out.
 
 Three sizes — small (13 mm), medium (16 mm, the popular one) and big
 (25 mm). Bigger marbles are heavier: they hit harder and are harder to move,
-but a finger flicks them a little slower. The computer always plays a marble
-of the same size as yours, so the match is fair. Five glass styles (cat's
-eye, swirl, galaxy, clear, opal) in eight colours.
+but a finger flicks them a little slower. Five glass styles (cat's eye,
+swirl, galaxy, clear, opal) in eight colours for you. The computer always
+plays a marble of the same size as yours, so the match is fair, but always
+its own black glass marble with white bands, which is not on your menu, so
+the two can never be confused.
 
 ## Physics notes
 

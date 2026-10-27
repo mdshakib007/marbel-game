@@ -2,7 +2,7 @@
 // computer player, input, audio, effects and the HUD.
 
 import * as THREE from 'three';
-import { AI_LEVELS, CAVE, MARBLE_COLORS, MARBLE_SIZES, MARBLE_STYLES, SHOT, START_LINE } from './config.js';
+import { AI_LEVELS, BOT_MARBLE, CAVE, MARBLE_COLORS, MARBLE_SIZES, SHOT, START_LINE } from './config.js';
 import { Terrain } from './terrain.js';
 import { Game } from './game.js';
 import { planShot } from './ai.js';
@@ -139,9 +139,7 @@ class App {
       this.previewView = null;
     }
     // The computer plays a marble of the same size as yours (a fair match)
-    // in a different colour and (usually) a different style.
-    const colors = Object.keys(MARBLE_COLORS).filter((c) => c !== values.color);
-    const styles = Object.keys(MARBLE_STYLES).filter((s) => s !== values.style);
+    // but always its own black-and-white one, so the two never look alike.
     const aiSize = values.size;
     const players = [
       { name: values.name, isAI: false, size: values.size, style: values.style, color: values.color, handX: -0.12 },
@@ -150,8 +148,8 @@ class App {
         isAI: true,
         aiLevel: values.level,
         size: aiSize,
-        style: styles[Math.floor(Math.random() * styles.length)],
-        color: colors[Math.floor(Math.random() * colors.length)],
+        style: BOT_MARBLE.style,
+        color: BOT_MARBLE.color,
         handX: 0.12 + (Math.random() - 0.5) * 0.4,
       },
     ];

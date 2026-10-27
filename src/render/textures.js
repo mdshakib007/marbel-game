@@ -227,6 +227,42 @@ export function makeSwirlTexture(hex, seed = 1, w = 512, h = 256) {
   return tex;
 }
 
+/**
+ * The computer's marble: deep black glass with two bold white bands that
+ * wrap around it on a slant, so it reads as black-and-white from any side.
+ */
+export function makeBotTexture(seed = 5, w = 512, h = 256) {
+  const c = canvas(w, h);
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(w, h);
+  const d = img.data;
+  const black = [12, 12, 14];
+  const white = [248, 248, 246];
+  const rng = createRng(seed);
+  const phase = rng() * 6.28;
+  for (let y = 0; y < h; y++) {
+    const v = y / h;
+    for (let x = 0; x < w; x++) {
+      const u = x / w;
+      // two bands per turn, slanted, with a touch of wobble
+      const band = Math.sin((u * 2 + v * 1.1) * Math.PI * 2 + phase + fbm2(u * 3, v * 3, seed, 2) * 0.5);
+      const edge = 0.35;
+      const t = Math.min(1, Math.max(0, (band - edge) / 0.12));
+      const col = mix(black, white, t);
+      const i = (y * w + x) * 4;
+      d[i] = col[0];
+      d[i + 1] = col[1];
+      d[i + 2] = col[2];
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = finish(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
+}
+
 /** Dark glass with glitter specks and a faint nebula (equirectangular). */
 export function makeGalaxyTexture(hex, seed = 2, w = 512, h = 256) {
   const c = canvas(w, h);

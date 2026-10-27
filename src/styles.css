@@ -101,6 +101,12 @@ body {
   box-shadow: inset -2px -3px 6px rgba(0, 0, 0, 0.4);
   flex: none;
 }
+/* the computer's black-and-white marble */
+.marble-icon.bot {
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.95) 0, rgba(255, 255, 255, 0.35) 16%, transparent 32%),
+    linear-gradient(135deg, #111 0 28%, #f4f4f2 28% 50%, #111 50% 78%, #f4f4f2 78% 100%);
+}
 .player-card .card-text {
   display: flex;
   flex-direction: column;
