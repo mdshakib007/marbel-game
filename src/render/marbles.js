@@ -127,9 +127,9 @@ export class MarbleView {
             })
           : // cheap glass: a faintly tinted glossy shell over the coloured vanes
             new THREE.MeshStandardMaterial({
-              color: col.clone().lerp(new THREE.Color(0xffffff), 0.3),
+              color: col,
               transparent: true,
-              opacity: 0.38,
+              opacity: 0.62,
               roughness: 0.04,
               metalness: 0.1,
               envMapIntensity: 2,
@@ -137,13 +137,14 @@ export class MarbleView {
             });
         // three thin coloured vanes meeting along one axis: the 'eye'
         const vaneMat = new THREE.MeshPhysicalMaterial({
-          color: col,
+          // under the cheap shell the vanes are paler streaks inside a tinted ball
+          color: glass ? col : col.clone().lerp(new THREE.Color(0xffffff), 0.45),
           emissive: col.clone().multiplyScalar(0.15),
           roughness: 0.45,
           clearcoat: 0.6,
         });
         const vaneGeo = new THREE.SphereGeometry(1, glass ? 24 : 14, glass ? 12 : 8);
-        const vaneScale = glass ? 1 : 1.32; // nearly fills the cheap shell
+        const vaneScale = glass ? 1 : 1.1;
         const eye = new THREE.Group();
         for (let i = 0; i < 3; i++) {
           const vane = new THREE.Mesh(vaneGeo, vaneMat);

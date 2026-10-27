@@ -43,11 +43,14 @@ export function buildScene(renderer, terrain, quality) {
   sun.target.position.set(0, 0, 0.6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
+  // Only the marbles cast real shadows, so the shadow camera is a small box
+  // that follows them (see fitShadowToPoints): every texel goes to the
+  // marbles and even a 1024 px map gives crisp edges.
   const sc = sun.shadow.camera;
-  sc.left = -2.8;
-  sc.right = 2.8;
-  sc.top = 2.8;
-  sc.bottom = -2.8;
+  sc.left = -0.6;
+  sc.right = 0.6;
+  sc.top = 0.6;
+  sc.bottom = -0.6;
   sc.near = 0.5;
   sc.far = 12;
   sun.shadow.bias = -0.00004;
@@ -81,7 +84,9 @@ export function buildScene(renderer, terrain, quality) {
   grassTex.repeat.set(36, 36);
   const lawn = new THREE.Mesh(
     new THREE.PlaneGeometry(60, 60),
-    new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1, metalness: 0 }),
+    quality.cheapShading
+      ? new THREE.MeshLambertMaterial({ map: grassTex })
+      : new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1, metalness: 0 }),
   );
   lawn.rotation.x = -Math.PI / 2;
   lawn.position.set(0, -0.03, 0.6);
@@ -89,12 +94,12 @@ export function buildScene(renderer, terrain, quality) {
   scene.add(lawn);
 
   // --- dirt terrain -------------------------------------------------------
-  const terrainMesh = buildTerrainMesh(terrain, quality.terrainNX, quality.terrainNZ);
+  const terrainMesh = buildTerrainMesh(terrain, quality.terrainNX, quality.terrainNZ, quality.cheapShading);
   terrainMesh.layers.enable(LAYER_MINIMAP);
   scene.add(terrainMesh);
 
   // --- brick walls --------------------------------------------------------
-  const walls = buildWalls();
+  const walls = buildWalls(quality.cheapShading);
   for (const w of walls.children) w.layers.enable(LAYER_MINIMAP);
   scene.add(walls);
 
@@ -115,7 +120,7 @@ function warp(t, a = 0.22) {
 }
 
 /** Dense near the cave, coarse at the edges: a warped grid. */
-export function buildTerrainMesh(terrain, NX = 320, NZ = 400) {
+export function buildTerrainMesh(terrain, NX = 320, NZ = 400, cheap = false) {
   const positions = new Float32Array(NX * NZ * 3);
   const colors = new Float32Array(NX * NZ * 3);
   const uvs = new Float32Array(NX * NZ * 2);
@@ -146,6 +151,9 @@ export function buildTerrainMesh(terrain, NX = 320, NZ = 400) {
       if (d > CAVE.radius && d < CAVE.radius + 0.02) shade *= 0.9 + 0.1 * ((d - CAVE.radius) / 0.02);
       const dish = Math.max(0, 1 - d / CAVE.dishRadius);
       shade *= 1 - 0.07 * dish;
+      // The walls' shadows are baked in: with the sun high to the +x/+z the
+      // walls on those sides throw a short band of shade onto the dirt.
+      shade *= wallShade(x, z);
       colors[k * 3] = shade;
       colors[k * 3 + 1] = shade;
       colors[k * 3 + 2] = shade;
@@ -171,14 +179,23 @@ export function buildTerrainMesh(terrain, NX = 320, NZ = 400) {
   geo.setIndex(new THREE.BufferAttribute(index, 1));
   geo.computeVertexNormals();
 
-  const mat = new THREE.MeshStandardMaterial({
-    map: makeDirtTexture(),
-    normalMap: makeDirtNormalMap(),
-    normalScale: new THREE.Vector2(0.55, 0.55),
-    roughness: 0.96,
-    metalness: 0,
-    vertexColors: true,
-  });
+  // Dirt is matte, so plain Lambert shading looks the same as the full PBR
+  // material at a fraction of the per-pixel cost (no environment lighting).
+  const mat = cheap
+    ? new THREE.MeshLambertMaterial({
+        map: makeDirtTexture(),
+        normalMap: makeDirtNormalMap(),
+        normalScale: new THREE.Vector2(0.55, 0.55),
+        vertexColors: true,
+      })
+    : new THREE.MeshStandardMaterial({
+        map: makeDirtTexture(),
+        normalMap: makeDirtNormalMap(),
+        normalScale: new THREE.Vector2(0.55, 0.55),
+        roughness: 0.96,
+        metalness: 0,
+        vertexColors: true,
+      });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   mesh.castShadow = false;
@@ -186,7 +203,56 @@ export function buildTerrainMesh(terrain, NX = 320, NZ = 400) {
   return mesh;
 }
 
-function buildWalls() {
+/** Baked shade of the walls on the dirt, 1 = none. Matches the sun direction. */
+function wallShade(x, z) {
+  let s = 1;
+  const sunX = 2.6 / 2.7; // horizontal run per unit height, towards -x
+  const sunZ = 1.4 / 2.7;
+  const dx = (FIELD.xMax - x) / (FIELD.wallHeight * sunX);
+  if (dx < 1) s *= 0.68 + 0.32 * smooth(dx);
+  const dz = (FIELD.zMax - z) / (FIELD.wallHeight * sunZ);
+  if (dz < 1) s *= 0.72 + 0.28 * smooth(dz);
+  return s;
+}
+
+function smooth(t) {
+  t = Math.min(1, Math.max(0, t));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Point the sun's shadow camera at a small box around the given points (the
+ * marbles). Returns true when the box changed, i.e. the shadow map must be
+ * redrawn.
+ */
+const _dir = new THREE.Vector3(2.6, 2.7, 1.4).normalize();
+export function fitShadowToPoints(sun, points) {
+  if (!points.length) return false;
+  let cx = 0;
+  let cz = 0;
+  for (const p of points) {
+    cx += p.x;
+    cz += p.z;
+  }
+  cx /= points.length;
+  cz /= points.length;
+  let reach = 0;
+  for (const p of points) reach = Math.max(reach, Math.abs(p.x - cx), Math.abs(p.z - cz));
+  const half = Math.min(3, Math.max(0.45, reach + 0.3));
+  const sc = sun.shadow.camera;
+  const t = sun.target.position;
+  if (Math.abs(t.x - cx) < 0.02 && Math.abs(t.z - cz) < 0.02 && Math.abs(sc.right - half) < 0.02) return false;
+  t.set(cx, 0, cz);
+  sun.position.set(cx + _dir.x * 4, _dir.y * 4, cz + _dir.z * 4);
+  sc.left = -half;
+  sc.right = half;
+  sc.top = half;
+  sc.bottom = -half;
+  sc.updateProjectionMatrix();
+  return true;
+}
+
+function buildWalls(cheap = false) {
   const group = new THREE.Group();
   const tex = makeBrickTexture();
   const h = FIELD.wallHeight + 0.04;
@@ -203,11 +269,11 @@ function buildWalls() {
     for (let i = 0; i < uv.count; i++) {
       uv.setXY(i, uv.getX(i) * (w / 0.5), uv.getY(i) * (h / 0.25));
     }
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 });
+    const mat = cheap ? new THREE.MeshLambertMaterial({ map: tex }) : new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 });
     const m = new THREE.Mesh(geo, mat);
     m.position.set(x, y, z);
     m.rotation.y = rotY;
-    m.castShadow = true;
+    m.castShadow = false; // baked into the dirt (see wallShade)
     m.receiveShadow = true;
     m.name = `wall-${side}`;
     m.userData.side = side;
@@ -254,11 +320,6 @@ export function fadeWalls(walls, camPos, target, dt) {
     }
     wall.material.opacity = 1 - 0.8 * fade;
     wall.material.depthWrite = fade < 0.5;
-    const cast = fade < 0.5;
-    if (wall.castShadow !== cast) {
-      wall.castShadow = cast;
-      shadowChanged = true;
-    }
   }
   return shadowChanged;
 }

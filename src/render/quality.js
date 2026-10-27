@@ -13,6 +13,7 @@ export const PRESETS = {
     softShadows: true,
     /** real refraction for the see-through glass (an extra scene pass) */
     transmission: true,
+    cheapShading: false,
     terrainNX: 320,
     terrainNZ: 400,
     sphereSegments: [48, 32],
@@ -22,17 +23,21 @@ export const PRESETS = {
   },
   low: {
     key: 'low',
-    maxPixelRatio: 1.5,
-    minPixelRatio: 0.7,
-    antialias: false,
+    // Phones have sharp screens and tile-based GPUs where MSAA is nearly
+    // free: keep the picture crisp and save on shading instead.
+    maxPixelRatio: 2,
+    minPixelRatio: 1,
+    antialias: true,
     shadowMapSize: 1024,
     softShadows: false,
     transmission: false,
-    terrainNX: 180,
-    terrainNZ: 220,
-    sphereSegments: [28, 18],
-    minimapEvery: 5,
-    particles: 0.5,
+    /** plain Lambert dirt, walls and lawn: no per-pixel environment lighting */
+    cheapShading: true,
+    terrainNX: 320,
+    terrainNZ: 400,
+    sphereSegments: [32, 20],
+    minimapEvery: 4,
+    particles: 0.75,
   },
 };
 
@@ -79,6 +84,7 @@ export class AdaptiveResolution {
     this._slowFor = 0;
     this._fastFor = 0;
     this._cooldown = 0;
+    this._start = 0;
     this.apply();
   }
 
@@ -88,8 +94,15 @@ export class AdaptiveResolution {
   }
 
   update(now) {
+    if (!this._start) this._start = now;
     if (this._last) {
-      const dt = Math.min(0.25, (now - this._last) / 1000);
+      const dt = (now - this._last) / 1000;
+      // Ignore the first seconds (textures and the yard are still being
+      // built) and one-off stalls: only a steady slow frame rate counts.
+      if (now - this._start < 4000 || dt > 0.12) {
+        this._last = now;
+        return;
+      }
       this._ema += (dt - this._ema) * 0.08;
       this._cooldown -= dt;
       if (this._ema > 1 / 38) {

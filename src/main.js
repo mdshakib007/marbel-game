@@ -6,7 +6,7 @@ import { AI_LEVELS, BOT_MARBLE, CAVE, MARBLE_COLORS, MARBLE_SIZES, SHOT, START_L
 import { Terrain } from './terrain.js';
 import { Game } from './game.js';
 import { planShot } from './ai.js';
-import { LAYER_MINIMAP, buildScene, createRenderer, fadeWalls } from './render/scene.js';
+import { LAYER_MINIMAP, buildScene, createRenderer, fadeWalls, fitShadowToPoints } from './render/scene.js';
 import { MARBLE_RENDER, MarbleView } from './render/marbles.js';
 import { AdaptiveResolution, detectQuality } from './render/quality.js';
 import { Effects } from './render/effects.js';
@@ -88,6 +88,7 @@ class App {
     this.scene = parts.scene;
     this.minimap = parts.minimap;
     this.walls = parts.walls;
+    this.sun = parts.sun;
     this.shadowDirty = true;
     this.minimapDirty = true;
     this.effects = new Effects(this.scene, this.terrain);
@@ -582,6 +583,7 @@ class App {
     this.effects.update(dt);
     this.rig.update(dt, aspect);
     if (fadeWalls(this.walls, this.camera.position, this.rig.target, dt)) this.shadowDirty = true;
+    if (fitShadowToPoints(this.sun, this._shadowPoints())) this.shadowDirty = true;
     if (this.effects.active) this.shadowDirty = true;
     this.shadowTimer += dt;
     if (this.shadowTimer > 1) {
@@ -628,6 +630,14 @@ class App {
         v.setVisible(false);
       }
     }
+  }
+
+  /** Where the shadow map should look: every visible marble (or the preview one). */
+  _shadowPoints() {
+    const pts = [];
+    if (this.state === 'setup' && this.previewView) pts.push(this.previewView.group.position);
+    else for (const v of this.views) if (v.visible) pts.push(v.group.position);
+    return pts;
   }
 
   /** Mark shadows and the mini-map stale when a marble has actually moved. */

@@ -132,14 +132,18 @@ the two can never be confused.
 
 ## Performance
 
-The game picks a rendering tier for the device (`src/render/quality.js`):
-phones, machines with 4 GB or less, few cores or a weak GPU get the **low**
-tier (no refraction, 1024 px hard shadows, a coarser terrain mesh, fewer
-particles, pixel ratio at most 1.5), everything else **high** (refractive
-glass, 2048 px soft shadows, pixel ratio at most 2). On top of that the
-render resolution adapts to the measured frame rate, shadows are redrawn
-only when something has moved, the mini-map is drawn into a small texture
-only when a marble moves, and when nothing moves the game draws every other
+The game picks a rendering tier for the device (`src/render/quality.js`).
+Phones, machines with 4 GB or less, few cores or a weak GPU get the **low**
+tier, which keeps the picture sharp (full pixel ratio up to 2, antialiasing)
+but saves on shading: plain Lambert dirt, walls and lawn instead of full
+PBR with environment lighting, tinted glass instead of real refraction,
+1024 px hard shadows. Everything else gets **high** (refractive glass,
+2048 px soft shadows). In both tiers the shadow map covers only a small box
+that follows the marbles, so shadows are crisp whatever the map size; the
+walls' shade is baked into the dirt. Shadows are redrawn only when a marble
+has moved, the mini-map is drawn into a small texture only when a marble
+moves, the render resolution steps down only after a sustained slow frame
+rate (never below 1x), and when nothing moves the game draws every other
 frame. Force a tier with `?quality=low` or `?quality=high`; the debug panel
 (`?debug=1`) shows the tier, pixel ratio and frame rate.
 
