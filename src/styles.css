@@ -667,6 +667,18 @@ button.primary:hover {
   }
 }
 
+/* On phones the setup sheet scrolls: keep the Start button floating at its
+   bottom edge so it is always visible. */
+@media (max-width: 720px), (max-height: 480px) {
+  .setup-panel #btn-start {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-top: 8px;
+    box-shadow: 0 -10px 16px rgba(18, 16, 14, 0.9), 0 4px 14px rgba(0, 0, 0, 0.4);
+  }
+}
+
 /* Phone held upright: the marble shows on top, the setup sheet slides up
    from the bottom. */
 @media (max-width: 720px) and (orientation: portrait) {
@@ -682,8 +694,14 @@ button.primary:hover {
     max-height: 62dvh;
     border-radius: 18px 18px 0 0;
     border-bottom: 0;
-    padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+    padding: 12px 14px 0;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+  }
+  #setup .setup-panel #btn-start {
+    bottom: 0;
+    margin-bottom: 0;
+    border-radius: 10px 10px 0 0;
+    padding-bottom: calc(9px + env(safe-area-inset-bottom));
   }
   #setup .setup-panel h1 {
     font-size: 22px;

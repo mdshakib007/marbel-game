@@ -61,6 +61,8 @@ class App {
     this.resolution = new AdaptiveResolution(this.renderer, this.quality);
     window.addEventListener('resize', () => this._resize());
     this._resize();
+    const muted = UI.loadSoundMuted();
+    if (muted != null) this.audio.setMuted(muted);
     this.ui.setSoundMuted(this.audio.muted);
     this.ui.showDebug(DEBUG);
     this._showSetup();
@@ -299,6 +301,7 @@ class App {
     this.audio.unlock();
     this.audio.setMuted(!this.audio.muted);
     this.ui.setSoundMuted(this.audio.muted);
+    UI.saveSoundMuted(this.audio.muted);
   }
 
   /** Open (true) / close (false) the pause menu; no argument toggles it. */

@@ -131,6 +131,8 @@ export class UI {
       this._saveSetup();
       this._emit('preview', this.setupValues());
     });
+    // The name is saved as it is typed (a 'change' only fires on blur).
+    this.el.name.addEventListener('input', () => this._saveSetup());
     setup.addEventListener('click', (e) => {
       const sw = e.target.closest('.swatch');
       if (sw) {
@@ -335,6 +337,24 @@ export class UI {
   setSoundMuted(m) {
     this.el.iconOn.classList.toggle('hidden', m);
     this.el.iconOff.classList.toggle('hidden', !m);
+  }
+
+  /** Remembered sound setting (null when never set). */
+  static loadSoundMuted() {
+    try {
+      const v = localStorage.getItem('marbel.muted');
+      return v == null ? null : v === '1';
+    } catch {
+      return null;
+    }
+  }
+
+  static saveSoundMuted(m) {
+    try {
+      localStorage.setItem('marbel.muted', m ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
   }
 
   setTopOn(on) {
