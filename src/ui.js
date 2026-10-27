@@ -1,6 +1,8 @@
-// HUD, setup screen, pause menu, results and toasts (plain DOM).
+// HUD, setup screen, pause menu, results and toasts (plain DOM), in the
+// player's language (see i18n.js).
 
 import { AI_LEVELS, MARBLE_COLORS, MARBLE_SIZES, MARBLE_STYLES } from './config.js';
+import { applyDom, getLang, isDefaultName, setLang, t } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,8 +19,7 @@ export class UI {
       menu: $('menu'),
       over: $('over'),
       debug: $('debug'),
-      turnText: $('turn-text'),
-      targetText: $('target-text'),
+      menuMode: $('menu-mode'),
       hint: $('hint'),
       powerFill: $('power-fill'),
       powerLabel: $('power-label'),
@@ -45,6 +46,7 @@ export class UI {
     this._buildChoices();
     this._wire();
     this._loadSetup();
+    this._applyLanguage();
   }
 
   on(name, fn) {
@@ -56,33 +58,68 @@ export class UI {
     if (fn) fn(...args);
   }
 
+  // ------------------------------------------------------------ language
+
+  /** The name shown for a player: the computer's (and a default name) is translated. */
+  nameOf(player) {
+    if (player.isAI) return t('hud.computer');
+    return isDefaultName(player.name) ? t('setup.nameDefault') : player.name;
+  }
+
+  /** Switch the UI language; `remember` stores it as the player's choice. */
+  setLanguage(lang, remember = false) {
+    if (lang === getLang() && !remember) return;
+    setLang(lang, remember);
+    this._applyLanguage();
+    this._emit('lang', lang);
+  }
+
+  _applyLanguage() {
+    applyDom(document);
+    this._buildChoices();
+    if (isDefaultName(this.el.name.value.trim()) || !this.el.name.value.trim()) this.el.name.value = t('setup.nameDefault');
+    for (const b of document.querySelectorAll('[data-lang-switch] button')) b.classList.toggle('on', b.dataset.lang === getLang());
+  }
+
+  /** (Re)build the setup choice lists in the current language, keeping the selection. */
   _buildChoices() {
+    const setup = this.el.setup;
+    const picked = (n, fallback) => setup.querySelector(`input[name="${n}"]:checked`)?.value || fallback;
+    const size = picked('size', 'medium');
+    const style = picked('style', 'catseye');
+    const level = picked('level', 'medium');
+    const color = setup.querySelector('.swatch.on')?.dataset.color || 'blue';
+
     const sizes = $('size-choices');
+    sizes.innerHTML = '';
     for (const s of Object.values(MARBLE_SIZES)) {
       sizes.insertAdjacentHTML(
         'beforeend',
-        `<label class="choice"><input type="radio" name="size" value="${s.key}" ${s.key === 'medium' ? 'checked' : ''}/> <span>${s.label}<small>${s.note}</small></span></label>`,
+        `<label class="choice"><input type="radio" name="size" value="${s.key}" ${s.key === size ? 'checked' : ''}/> <span>${t(`size.${s.key}`)}<small>${t(`size.${s.key}.note`)}</small></span></label>`,
       );
     }
     const styles = $('style-choices');
+    styles.innerHTML = '';
     for (const s of Object.values(MARBLE_STYLES)) {
       styles.insertAdjacentHTML(
         'beforeend',
-        `<label class="choice"><input type="radio" name="style" value="${s.key}" ${s.key === 'catseye' ? 'checked' : ''}/> <span>${s.label}<small>${s.note}</small></span></label>`,
+        `<label class="choice"><input type="radio" name="style" value="${s.key}" ${s.key === style ? 'checked' : ''}/> <span>${t(`style.${s.key}`)}<small>${t(`style.${s.key}.note`)}</small></span></label>`,
       );
     }
     const colors = $('color-choices');
+    colors.innerHTML = '';
     for (const c of Object.values(MARBLE_COLORS)) {
       colors.insertAdjacentHTML(
         'beforeend',
-        `<button type="button" class="swatch ${c.key === 'blue' ? 'on' : ''}" data-color="${c.key}" title="${c.label}" style="--c:${hexCss(c.hex)}"></button>`,
+        `<button type="button" class="swatch ${c.key === color ? 'on' : ''}" data-color="${c.key}" title="${t(`color.${c.key}`)}" style="--c:${hexCss(c.hex)}"></button>`,
       );
     }
     const levels = $('level-choices');
+    levels.innerHTML = '';
     for (const l of Object.values(AI_LEVELS)) {
       levels.insertAdjacentHTML(
         'beforeend',
-        `<label class="choice"><input type="radio" name="level" value="${l.key}" ${l.key === 'medium' ? 'checked' : ''}/> <span>${l.label}</span></label>`,
+        `<label class="choice"><input type="radio" name="level" value="${l.key}" ${l.key === level ? 'checked' : ''}/> <span>${t(`level.${l.key}`)}</span></label>`,
       );
     }
   }
@@ -102,6 +139,9 @@ export class UI {
         this._emit('preview', this.setupValues());
       }
     });
+    for (const b of document.querySelectorAll('[data-lang-switch] button')) {
+      b.addEventListener('click', () => this.setLanguage(b.dataset.lang, true));
+    }
     $('seed-random').addEventListener('click', () => {
       this.el.seed.value = String(1 + Math.floor(Math.random() * 99999));
       this._saveSetup();
@@ -137,8 +177,9 @@ export class UI {
     const color = setup.querySelector('.swatch.on')?.dataset.color || 'blue';
     const mode = radio('mode');
     const target = Math.max(1, Math.min(99, Number(this.el.target.value) || 10));
+    const typed = this.el.name.value.trim().slice(0, 14);
     return {
-      name: (this.el.name.value || 'You').trim().slice(0, 14) || 'You',
+      name: !typed || isDefaultName(typed) ? t('setup.nameDefault') : typed,
       size: radio('size') || 'medium',
       style: radio('style') || 'catseye',
       color,
@@ -207,21 +248,16 @@ export class UI {
 
   showOver({ winner, players, ended }) {
     const you = players[0];
-    const title = !winner ? 'Draw!' : winner === you ? 'You win!' : `${winner.name} wins!`;
-    this.el.overTitle.textContent = title;
-    this.el.overSub.textContent = ended
-      ? 'Game ended.'
-      : winner
-        ? `${winner.name} reached ${winner.score} points first.`
-        : '';
+    this.el.overTitle.textContent = !winner ? t('over.draw') : winner === you ? t('over.win') : t('over.lose', { name: this.nameOf(winner) });
+    this.el.overSub.textContent = ended ? t('over.ended') : winner ? t('over.reached', { name: this.nameOf(winner), n: winner.score }) : '';
     const rows = players
       .map(
         (p) => `<tr class="${p === winner ? 'winner' : ''}">
-          <td><span class="marble-icon" style="--c:${hexCss(MARBLE_COLORS[p.color].hex)}; display:inline-block; width:14px; height:14px; border-radius:50%; margin-right:6px; vertical-align:-2px"></span>${p.name}</td>
+          <td><span class="marble-icon" style="--c:${hexCss(MARBLE_COLORS[p.color].hex)}; display:inline-block; width:14px; height:14px; border-radius:50%; margin-right:6px; vertical-align:-2px"></span>${escapeHtml(this.nameOf(p))}</td>
           <td><b>${p.score}</b></td><td>${p.hits}</td><td>${p.caveEntries}</td><td>${p.marblesBroken}</td></tr>`,
       )
       .join('');
-    this.el.overTable.innerHTML = `<tr><th>Player</th><th>Points</th><th>Hits</th><th>Caves</th><th>Broken</th></tr>${rows}`;
+    this.el.overTable.innerHTML = `<tr><th>${t('over.player')}</th><th>${t('over.points')}</th><th>${t('over.hits')}</th><th>${t('over.caves')}</th><th>${t('over.broken')}</th></tr>${rows}`;
     this.el.over.classList.remove('hidden');
   }
 
@@ -234,31 +270,27 @@ export class UI {
   setPlayers(players) {
     players.forEach((p, i) => {
       const card = this.el.cards[i];
-      card.querySelector('.name').textContent = p.name;
+      card.querySelector('.name').textContent = this.nameOf(p);
       card.querySelector('.marble-icon').style.setProperty('--c', hexCss(MARBLE_COLORS[p.color].hex));
     });
   }
 
+  /** Scores, power badges, status lines and the highlight on whose turn it is. */
   updateHud(game) {
     game.players.forEach((p, i) => {
       const card = this.el.cards[i];
       card.querySelector('.score').textContent = String(p.score);
       card.querySelector('.badge').classList.toggle('on', p.powered);
       card.classList.toggle('active', game.phase !== 'over' && game.current === i);
-      const size = MARBLE_SIZES[p.size].label.toLowerCase();
-      const st = p.inHand ? 'marble in hand' : p.powered ? `${size} · has the power` : `${size} · needs the cave`;
-      card.querySelector('.status').textContent = st;
+      const size = t(`size.${p.size}`).toLowerCase();
+      card.querySelector('.status').textContent = p.inHand ? t('hud.inHand') : p.powered ? t('hud.hasPower', { size }) : t('hud.needsCave', { size });
     });
-    this.el.targetText.textContent = game.targetScore ? `first to ${game.targetScore} points` : 'just for fun';
+    this.el.menuMode.textContent = game.targetScore ? t('menu.modeTarget', { n: game.targetScore }) : t('menu.modeFun');
   }
 
-  setTurnText(t) {
-    this.el.turnText.textContent = t;
-  }
-
-  setHint(t) {
-    this.el.hint.textContent = t;
-    this.el.hint.classList.toggle('hidden', !t);
+  setHint(text) {
+    this.el.hint.textContent = text;
+    this.el.hint.classList.toggle('hidden', !text);
   }
 
   setPower(power, label) {
@@ -310,7 +342,11 @@ export class UI {
     this.el.debug.classList.toggle('hidden', !on);
   }
 
-  setDebugText(t) {
-    this.el.dbgOut.textContent = t;
+  setDebugText(text) {
+    this.el.dbgOut.textContent = text;
   }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }

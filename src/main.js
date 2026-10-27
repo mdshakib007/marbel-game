@@ -14,6 +14,7 @@ import { CameraRig } from './render/camera.js';
 import { AudioEngine } from './audio.js';
 import { InputController } from './input.js';
 import { UI } from './ui.js';
+import { detectLang, t } from './i18n.js';
 
 const DEBUG = new URLSearchParams(location.search).has('debug');
 
@@ -36,6 +37,7 @@ class App {
     this.autoplay = false;
     this.seed = null;
     this.lastSetup = null;
+    this.lastTurn = null;
     this.rollSmoothing = new Map();
 
     this._buildWorld(this.ui.setupValues().seed);
@@ -144,7 +146,7 @@ class App {
     const players = [
       { name: values.name, isAI: false, size: values.size, style: values.style, color: values.color, handX: -0.12 },
       {
-        name: 'Computer',
+        name: t('hud.computer'),
         isAI: true,
         aiLevel: values.level,
         size: aiSize,
@@ -210,6 +212,17 @@ class App {
       if (!this.rig.topView) this.rig.frame(this.game.shotOrigin(p), CAVE, { dist: 0.7, pitch: 0.46 });
     });
     ui.on('debug', (what) => this._debug(what));
+    ui.on('lang', () => this._onLang());
+  }
+
+  /** The language changed: redo every piece of text that is not static markup. */
+  _onLang() {
+    const g = this.game;
+    if (!g) return;
+    g.players[1].name = t('hud.computer');
+    this.ui.setPlayers(g.players);
+    this.ui.updateHud(g);
+    if (this.lastTurn && g.canShoot() && g.activePlayer === this.lastTurn.player) this._turnTexts(this.lastTurn);
   }
 
   _wireInput() {
@@ -279,29 +292,43 @@ class App {
     g.on('resolved', (r) => this._onResolved(r));
     g.on('opening-done', (e) => {
       const first = e.order[0];
-      const text = first === g.players[0] ? "You're closest to the cave — you move first" : `${first.name} is closest to the cave and moves first`;
+      const text = first === g.players[0] ? t('toast.youFirst') : t('toast.theyFirst', { name: this.ui.nameOf(first) });
       this.ui.toast(text, { kind: first === g.players[0] ? 'good' : 'bad', life: 3 });
     });
-    g.on('lift', (e) => {
+    g.on('lift', () => {
       this.audio.blip(true);
-      this.ui.toast(`${e.player.name}'s marble is lifted out of the cave to the rim`, { life: 2.4 });
-      this.ui.setHint('Lifting the marble out of the cave…');
+      this.ui.setHint(t('hint.lifting'));
     });
     g.on('over', (e) => this._onOver(e));
   }
 
   // ------------------------------------------------------------ game events
 
-  _humanHint(player, kind) {
-    if (kind === 'throw') {
-      return 'Drag back from your marble and release to lob it at the cave. Wheel / ↑↓ changes the angle.';
-    }
-    if (player.powered) return "You have the POWER: pull back hard and knock the computer's marble away from the cave!";
-    return 'No power yet: pull back from your marble for a gentle flick. Get into the cave to earn the power.';
+  _humanHint(player, kind, extra, caveTurn) {
+    if (kind === 'throw') return t('hint.throw');
+    const lead = caveTurn ? `${t('hint.caveTurn')} ` : extra ? `${t('hint.extra')} ` : '';
+    return lead + (player.powered ? t('hint.powered') : t('hint.weak'));
   }
 
-  _onTurn({ player, kind, opening, extra }) {
+  _flickLabel(player, kind) {
+    return kind === 'throw' ? t('hud.lob') : player.powered ? t('hud.powerFlick') : t('hud.weakFlick');
+  }
+
+  /** Hint and power label for the turn (also redone when the language changes). */
+  _turnTexts({ player, kind, opening, extra, caveTurn }) {
+    if (player.isAI) {
+      this.ui.setHint(kind === 'throw' ? t('hint.aiThrow') : extra && !opening ? t('hint.aiAgain') : t('hint.aiFlick'));
+      this.ui.setPower(0, '');
+      return;
+    }
+    this.ui.setHint(this._humanHint(player, kind, extra, caveTurn));
+    this.ui.setPower(0, this._flickLabel(player, kind));
+  }
+
+  _onTurn(e) {
+    const { player, kind, opening } = e;
     const game = this.game;
+    this.lastTurn = e;
     this.ui.updateHud(game);
     this.aim.hide();
     this.rollSmoothing.clear();
@@ -316,23 +343,19 @@ class App {
       this.input.setEnabled(false);
       this.input.setContext(null);
       this.aim.clearHighlight();
-      this.ui.setTurnText(opening ? `${player.name}'s throw` : extra ? `${player.name} shoots again` : `${player.name}'s turn`);
-      this.ui.setHint(kind === 'throw' ? 'The computer lobs its marble from the line…' : 'The computer is lining up its flick…');
+      this._turnTexts(e);
       this.ui.showElevation(false);
       this.ui.showHandX(false);
-      this.ui.setPower(0, '');
       if (kind === 'throw') game.setHandX(player, 0.1 + (Math.random() - 0.5) * 0.5);
       this._startAI(player, AI_LEVELS[player.aiLevel]);
       return;
     }
 
-    this.ui.setTurnText(opening ? 'Your throw' : extra ? 'Hit! Your turn again' : 'Your turn');
-    this.ui.setHint(this._humanHint(player, kind));
+    this._turnTexts(e);
     this.ui.showElevation(kind === 'throw');
     this.ui.showHandX(kind === 'throw');
     this.ui.setHandX(player.handX);
     this.ui.setElevation(this.input.elevation);
-    this.ui.setPower(0, kind === 'throw' ? 'Lob' : player.powered ? 'POWER flick' : 'Weak flick');
     this._refreshHumanContext();
     if (this.autoplay) this._startAI(player, AI_LEVELS.medium);
     else this._updateInputEnabled();
@@ -359,7 +382,7 @@ class App {
     this.aim.clearHighlight();
     this.ui.showElevation(false);
     this.ui.showHandX(false);
-    this.ui.setHint(kind === 'throw' ? 'Flying…' : 'Rolling…');
+    this.ui.setHint(kind === 'throw' ? t('hint.flying') : t('hint.rolling'));
     this.ui.setThinking(false);
     if (kind === 'throw') this.audio.whoosh();
     this.rig.follow(player.marble);
@@ -383,30 +406,13 @@ class App {
   }
 
   _onResolved(r) {
+    // Scores, power badges and the turn highlight tell the story on the
+    // cards; no pop-up notifications for hits or cave entries.
     const ui = this.ui;
     const you = this.game.players[0];
-    if (r.hit && r.safeHit) {
-      ui.toast(`${r.victim === you ? 'Your' : `${r.victim.name}'s`} marble is safe inside the cave — no points`, { life: 3 });
-    } else if (r.hit) {
-      const mine = r.shooter === you;
-      ui.toast(`${mine ? 'You' : r.shooter.name} hit ${mine ? "the computer's" : 'your'} marble: ${r.hit.tier.label} (${r.hit.speed.toFixed(1)} m/s) +${r.points}`, {
-        kind: mine ? 'good' : 'bad',
-        life: 3,
-        big: r.points >= 3,
-      });
-      if (r.powerStripped) {
-        ui.toast(`${r.victim.name} lost the POWER${r.pointStripped ? ' and 1 point' : ''}`, { kind: r.victim === you ? 'bad' : 'good', life: 3 });
-      }
-    }
     for (const c of r.caveEntries) {
-      if (c.gained) {
-        this.audio.plunk();
-        this.effects.caveDust(CAVE.x, this.terrain.caveRimHeight() + 0.003, CAVE.z);
-        ui.toast(`${c.player.name} entered the cave — ${c.player === you ? 'you have' : 'it has'} the POWER!`, { kind: c.player === you ? 'good' : 'bad', life: 3.2, big: true });
-      } else {
-        this.audio.plunk();
-        ui.toast(`${c.player.name} is in the cave again`, { life: 2 });
-      }
+      this.audio.plunk();
+      if (c.gained) this.effects.caveDust(CAVE.x, this.terrain.caveRimHeight() + 0.003, CAVE.z);
     }
     if (r.broken) {
       const p = r.broken.player;
@@ -414,11 +420,7 @@ class App {
       this.audio.shatter();
       this.effects.shatter(w.x, w.y, w.z, MARBLE_COLORS[p.color].hex, p.marble.r);
       this.views[p.index].setVisible(false);
-      const whose = p === you ? 'Your' : `${p.name}'s`;
-      ui.toast(`${whose} marble SHATTERED! A new one must be thrown from the line.`, { kind: 'bad', life: 4.5, big: true });
-    }
-    if (r.extraTurn && !r.winner) {
-      ui.toast(`${r.shooter === you ? 'You shoot' : `${r.shooter.name} shoots`} again`, { life: 2 });
+      ui.toast(p === you ? t('toast.shatterYou') : t('toast.shatterThey', { name: ui.nameOf(p) }), { kind: 'bad', life: 4.5, big: true });
     }
     ui.updateHud(this.game);
   }
@@ -431,7 +433,6 @@ class App {
     this.ai = null;
     this.ui.setThinking(false);
     this.ui.updateHud(this.game);
-    this.ui.setTurnText('Game over');
     this.ui.setHint('');
     if (winner === players[0]) this.audio.fanfare();
     else if (winner) this.audio.sad();
@@ -486,7 +487,7 @@ class App {
       } else {
         this.aim.showFlick({ origin, dirX: ai.result.dirX, dirZ: ai.result.dirZ, power: ai.result.power, radius });
       }
-      this.ui.setPower(ai.result.power, `${(ai.result.power * this.game.maxSpeed(ai.player)).toFixed(1)} m/s`);
+      this.ui.setPower(ai.result.power, t('hud.speed', { label: this._flickLabel(ai.player, kind), v: (ai.result.power * this.game.maxSpeed(ai.player)).toFixed(1) }));
       return;
     }
     ai.showTimer -= dt;
@@ -513,8 +514,7 @@ class App {
       this.aim.showFlick({ origin: ctx.origin, dirX: aim.dirX, dirZ: aim.dirZ, power: aim.power, radius: ctx.radius });
     }
     if (aim.pull) this.aim.showPull(ctx.origin, aim.pull);
-    const label = ctx.kind === 'throw' ? 'Lob' : player.powered ? 'POWER flick' : 'Weak flick';
-    this.ui.setPower(aim.power, `${label} · ${(aim.power * ctx.maxSpeed).toFixed(1)} m/s`);
+    this.ui.setPower(aim.power, t('hud.speed', { label: this._flickLabel(player, ctx.kind), v: (aim.power * ctx.maxSpeed).toFixed(1) }));
   }
 
   // ------------------------------------------------------------ frame
@@ -682,3 +682,6 @@ class App {
 }
 
 window.app = new App();
+// Pick the language (saved choice, Bangla browser, or a connection from
+// Bangladesh) once the page is up; until then the UI is in English.
+detectLang().then((lang) => window.app.ui.setLanguage(lang, false));

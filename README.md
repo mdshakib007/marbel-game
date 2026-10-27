@@ -32,20 +32,33 @@ let the computer play both sides, slow motion).
 1. **Opening** — both players lob their marble from the chalk line at the
    cave. Whoever ends closest to (or inside) the cave moves first.
 2. **Without the power** you can only flick weakly: the marble does not go far.
-   Get it into the cave to win the power.
+   Get it into the cave to win the power. Entering the cave earns no points,
+   but whoever enters the cave moves next (the marble is lifted to the rim,
+   facing the opponent, and they shoot again).
 3. **With the power** you flick hard. Use it to knock the computer's marble
    away so it cannot reach the cave.
-4. **Points** — any contact with the other marble scores by how hard the hit
-   was: soft touch 1, solid hit 2, hard hit 3, smash 4. If the victim had the
-   power they lose it (and 1 point, if they have any) and must enter the cave
-   again. A scoring hit also earns you another shot.
+4. **Points** — only the power scores. A hit by a player who has the power
+   earns 1 point. A player without the power who hits a rival with the power
+   earns 2 points, and the rival loses the power (and must enter the cave
+   again). Two marbles without the power touching score nothing. A hit earns
+   another shot.
 5. **Safe in the cave** — a marble resting inside the cave is safe: touching
-   it scores nothing unless it is knocked out of the cave. At the start of its
-   owner's turn it is lifted to the rim, facing the opponent.
+   it scores nothing unless it is knocked out of the cave.
 6. **Breakage** — very rarely (0.001 %) a hit shatters one of the two marbles.
    Its owner lobs a fresh marble from the line, without the power.
 7. **Winning** — choose a target score at the start (first to reach it wins)
    or play just for fun and end the game from the menu.
+
+Whose turn it is shows on the player cards at the top (the active card
+lights up); there are no pop-up notifications for hits or cave entries.
+
+## Languages
+
+The game is in English and Bangla. It picks Bangla for a browser set to
+Bangla or for a connection from Bangladesh (a quick lookup of the public IP
+at ipwho.is, skipped if it does not answer within a few seconds), English
+otherwise. The switch at the top of the setup screen and the pause menu
+overrides this, and the choice is remembered in the browser.
 
 ## Controls
 
@@ -112,6 +125,7 @@ src/ai.js             computer player (simulation-based planner)
 src/audio.js          synthesised sound effects
 src/input.js          pointer / wheel / keyboard
 src/ui.js             HUD, setup, menus, toasts
+src/i18n.js           English / Bangla strings and language detection
 src/main.js           wires everything together
 src/render/           three.js scene, marbles, effects, aim guide, camera
 test/                 node:test suites for physics and rules

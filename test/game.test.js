@@ -78,7 +78,7 @@ test('opening: both players lob, closest to the cave moves first', () => {
   assert.ok(game.maxSpeed() < 1.5, 'without the power the flick is weak');
 });
 
-test('a hit scores by speed, strips a powered victim, and earns another turn', () => {
+test('a powered hit scores 1, strips a powered victim, and earns another turn', () => {
   const game = makeGame();
   midGame(game, { x: 0.3, z: 1.0 }, { x: 0.3, z: 0.85 });
   const [p0, p1] = game.players;
@@ -91,37 +91,30 @@ test('a hit scores by speed, strips a powered victim, and earns another turn', (
   const r = game.lastResult;
   assert.ok(r.hit, 'should hit');
   assert.ok(r.hit.speed > 1.7, `smash expected, got ${r.hit.speed}`);
-  assert.equal(r.points, 4);
-  assert.equal(p0.score, 4);
+  assert.equal(r.hit.tier.key, 'smash');
+  assert.equal(r.points, 1, 'the power scores one point per hit');
+  assert.equal(p0.score, 1);
   assert.equal(r.powerStripped, true);
   assert.equal(p1.powered, false);
-  assert.equal(p1.score, 2, 'victim loses one point');
+  assert.equal(p1.score, 3, 'the victim keeps its points');
   assert.equal(r.extraTurn, true);
   assert.equal(game.current, 0, 'hitter shoots again');
   assert.equal(game.phase, 'turn');
 });
 
-test('a victim with zero points cannot go negative; a miss passes the turn', () => {
+test('a miss passes the turn', () => {
   const game = makeGame();
   midGame(game, { x: -0.4, z: 1.2 }, { x: -0.4, z: 1.0 });
   const [p0, p1] = game.players;
   p0.powered = true;
-  p1.powered = true;
-  p1.score = 0;
-  game.shoot({ dirX: 0, dirZ: -1, power: 0.5 });
-  settle(game);
-  assert.ok(game.lastResult.hit);
-  assert.equal(p1.score, 0);
-  assert.equal(p1.powered, false);
-  assert.equal(game.current, 0);
-  // now miss on purpose (shoot away)
   game.shoot({ dirX: 1, dirZ: 0, power: 0.3 });
   settle(game);
   assert.equal(game.lastResult.hit, null);
+  assert.equal(p0.score, 0);
   assert.equal(game.current, 1, 'turn passes after a miss');
 });
 
-test('a weak (un-powered) touch still scores and strips the power', () => {
+test('an un-powered touch on a powered rival scores 2 and strips the power', () => {
   const game = makeGame();
   midGame(game, { x: 0.5, z: 0.9 }, { x: 0.5, z: 0.78 });
   const [p0, p1] = game.players;
@@ -130,15 +123,28 @@ test('a weak (un-powered) touch still scores and strips the power', () => {
   game.shoot({ dirX: 0, dirZ: -1, power: 1 });
   settle(game);
   assert.ok(game.lastResult.hit, 'weak flick reaches a marble 12 cm away');
-  const tier = hitPoints(game.lastResult.hit.speed);
-  assert.equal(game.lastResult.points, tier.points, `points follow the speed tier (speed ${game.lastResult.hit.speed})`);
-  assert.ok(tier.points <= 2, 'a weak flick cannot smash');
+  assert.equal(game.lastResult.points, 2);
+  assert.equal(p0.score, 2);
   assert.equal(p1.powered, false);
-  assert.equal(p1.score, 0);
-  assert.equal(p0.score, tier.points);
+  assert.equal(p1.score, 1);
+  assert.equal(game.current, 0, 'a counted hit earns another shot');
 });
 
-test('entering the cave grants the power; the marble is lifted to the rim next turn', () => {
+test('two power-less marbles touching score nothing (but the shooter goes again)', () => {
+  const game = makeGame();
+  midGame(game, { x: 0.5, z: 0.9 }, { x: 0.5, z: 0.78 });
+  const [p0, p1] = game.players;
+  game.shoot({ dirX: 0, dirZ: -1, power: 1 });
+  settle(game);
+  assert.ok(game.lastResult.hit, 'touched');
+  assert.equal(game.lastResult.points, 0);
+  assert.equal(p0.score, 0);
+  assert.equal(p1.score, 0);
+  assert.equal(p1.powered, false);
+  assert.equal(game.current, 0);
+});
+
+test('entering the cave grants the power, no points, and the next move; the marble is lifted to the rim', () => {
   const game = makeGame();
   midGame(game, { x: 0, z: 0.22 }, { x: 0.6, z: -0.5 });
   const [p0, p1] = game.players;
@@ -146,13 +152,14 @@ test('entering the cave grants the power; the marble is lifted to the rim next t
   game.on('*', (e) => events.push(e));
   game.shoot({ dirX: 0, dirZ: -1, power: 0.95 });
   settle(game);
-  assert.ok(game.lastResult.caveEntries.some((c) => c.player === p0 && c.gained), 'cave entry recorded');
+  const r = game.lastResult;
+  assert.ok(r.caveEntries.some((c) => c.player === p0 && c.gained), 'cave entry recorded');
   assert.equal(p0.powered, true);
-  assert.ok(game.isInCave(p0.marble), 'marble still rests in the cave');
-  assert.equal(game.current, 1, 'turn passes');
-  // Opponent misses; back to p0 whose marble must be lifted out of the hole.
-  game.shoot({ dirX: 0, dirZ: -1, power: 0.2 });
-  settle(game);
+  assert.equal(p0.score, 0, 'entering the cave earns no points');
+  assert.equal(r.caveTurn, true);
+  assert.equal(r.extraTurn, true);
+  assert.equal(game.current, 0, 'whoever entered the cave moves next');
+  settle(game); // the lift
   assert.ok(events.some((e) => e.type === 'lift' && e.player === p0), 'lift event');
   assert.equal(game.phase, 'turn');
   assert.equal(game.current, 0);
@@ -174,9 +181,14 @@ test('a marble resting in the cave is safe: a touch that leaves it there scores 
   game.shoot({ dirX: 0, dirZ: -1, power: 0.95 });
   settle(game);
   assert.equal(p0.powered, true);
+  assert.equal(game.current, 0, 'p0 entered the cave and moves next');
+  // Stage the situation under test: p0's marble rests in the cave and p1
+  // (given the power for a hard flick) taps it from the rim.
+  game.placing = null;
+  game.phase = 'turn';
+  game.current = 1;
+  game.world.placeOnGround(p0.marble, CAVE.x, CAVE.z);
   assert.ok(game.isInCave(p0.marble));
-  assert.equal(game.current, 1);
-  // p1 (given the power for a hard flick) taps p0's marble inside the cave from the rim
   p1.powered = true;
   p1.score = 2;
   game.world.placeOnGround(p1.marble, 0, CAVE.radius + p1.marble.r + 0.01);
@@ -188,8 +200,10 @@ test('a marble resting in the cave is safe: a touch that leaves it there scores 
   assert.equal(r.points, 0);
   assert.equal(p1.score, 2, 'no points for a safe hit');
   assert.equal(p0.powered, true, 'power not stripped');
-  assert.equal(r.extraTurn, false, 'no extra turn');
-  assert.equal(game.current, 0, 'turn passes');
+  // No extra turn for the safe touch itself; p1 moves again only if its
+  // own marble dropped into the cave on the way (that is the cave rule).
+  assert.equal(r.extraTurn, r.caveTurn, 'no extra turn for a safe hit');
+  assert.equal(game.current, r.caveTurn ? 1 : 0);
 });
 
 test('knocking a marble out of the cave counts fully', () => {
@@ -198,7 +212,12 @@ test('knocking a marble out of the cave counts fully', () => {
   const [p0, p1] = game.players;
   game.shoot({ dirX: 0, dirZ: -1, power: 0.95 });
   settle(game);
-  assert.ok(game.isInCave(p0.marble) && p0.powered);
+  assert.ok(p0.powered);
+  game.placing = null;
+  game.phase = 'turn';
+  game.current = 1;
+  game.world.placeOnGround(p0.marble, CAVE.x, CAVE.z);
+  assert.ok(game.isInCave(p0.marble));
   p0.score = 2;
   p1.powered = true;
   game.world.placeOnGround(p1.marble, 0, 0.35);
@@ -217,9 +236,9 @@ test('knocking a marble out of the cave counts fully', () => {
   settle(game);
   const r = game.lastResult;
   assert.equal(r.safeHit, false, 'victim left the cave: the hit counts');
-  assert.ok(r.points > 0, 'scored');
+  assert.equal(r.points, 1, 'powered shooter scores one');
   assert.equal(p0.powered, false, 'knocked out: power stripped');
-  assert.equal(p0.score, 1, 'and a point taken');
+  assert.equal(p0.score, 2, 'no point taken from the victim');
   assert.equal(r.extraTurn, true, 'shooter goes again');
 });
 
@@ -249,8 +268,25 @@ test('a shattered marble is replaced from the start line without the power', () 
   assert.ok(game.handPosition(loser).z === START_LINE.z);
 });
 
+test('knocking the rival into the cave hands them the power and the move', () => {
+  const game = makeGame();
+  // p1 sits just in front of the cave; p0 (powered) hits it in from behind.
+  midGame(game, { x: 0, z: 0.2 }, { x: 0, z: 0.05 });
+  const [p0, p1] = game.players;
+  p0.powered = true;
+  game.shoot({ dirX: 0, dirZ: -1, power: 0.3 });
+  settle(game);
+  const r = game.lastResult;
+  assert.ok(r.hit, 'hit');
+  assert.equal(r.points, 1);
+  assert.ok(r.caveEntries.some((c) => c.player === p1 && c.gained), 'victim dropped into the cave');
+  assert.equal(p1.powered, true, 'victim won the power');
+  assert.equal(r.extraTurn, false);
+  assert.equal(game.current, 1, 'the one who entered the cave moves next');
+});
+
 test('reaching the target score ends the game', () => {
-  const game = makeGame({ targetScore: 3 });
+  const game = makeGame({ targetScore: 1 });
   midGame(game, { x: 0.3, z: 1.0 }, { x: 0.3, z: 0.88 });
   const [p0] = game.players;
   p0.powered = true;
@@ -258,7 +294,7 @@ test('reaching the target score ends the game', () => {
   game.on('over', (e) => (over = e));
   game.shoot({ dirX: 0, dirZ: -1, power: 1 });
   settle(game);
-  assert.ok(p0.score >= 3);
+  assert.ok(p0.score >= 1);
   assert.equal(game.phase, 'over');
   assert.equal(over.winner, p0);
   assert.equal(game.canShoot(), false);

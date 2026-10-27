@@ -106,15 +106,26 @@ export function sizeSpeedFactor(radius) {
   return Math.sqrt(MARBLE_SIZES.medium.radius / radius);
 }
 
-/** Points awarded for a hit, by closing speed at impact (m/s). */
+/**
+ * Points for a counted hit. Only the power scores: a powered shooter earns 1
+ * for any hit; a shooter without the power earns 2 for knocking a powered
+ * rival (who loses the power); two power-less marbles touching score nothing.
+ */
+export function hitPoints(shooterPowered, victimPowered) {
+  if (shooterPowered) return 1;
+  if (victimPowered) return 2;
+  return 0;
+}
+
+/** Hit strength by closing speed (m/s): for sounds, sparks and the stats. */
 export const HIT_TIERS = [
-  { minSpeed: 0.0, points: 1, label: 'Soft touch' },
-  { minSpeed: 0.45, points: 2, label: 'Solid hit' },
-  { minSpeed: 1.0, points: 3, label: 'Hard hit' },
-  { minSpeed: 1.7, points: 4, label: 'Smash!' },
+  { minSpeed: 0.0, key: 'soft' },
+  { minSpeed: 0.45, key: 'solid' },
+  { minSpeed: 1.0, key: 'hard' },
+  { minSpeed: 1.7, key: 'smash' },
 ];
 
-export function hitPoints(closingSpeed) {
+export function hitTier(closingSpeed) {
   let tier = HIT_TIERS[0];
   for (const t of HIT_TIERS) if (closingSpeed >= t.minSpeed) tier = t;
   return tier;

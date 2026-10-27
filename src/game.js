@@ -6,10 +6,15 @@
 //              Whoever ends closest (or inside) moves first.
 //   turn     : the current player flicks (weak without the power, hard with it)
 //   shot     : physics runs until everything rests, then the shot is resolved:
-//                - first marble-to-marble contact scores for the shooter
-//                  (points by closing speed); a powered victim loses the power
-//                  and 1 point; a successful hit earns another turn
+//                - first marble-to-marble contact counts (unless the victim
+//                  rested in the cave and is still there): a powered shooter
+//                  scores 1, an un-powered shooter knocking a powered rival
+//                  scores 2, two power-less marbles score 0; a powered
+//                  victim loses the power
 //                - a marble resting in the cave grants its owner the power
+//                - next to move: whoever entered the cave on this shot;
+//                  otherwise the shooter again after a counted hit;
+//                  otherwise the opponent
 //                - a tiny chance that a hit shatters one of the marbles; the
 //                  owner lobs a new one from the start line (power lost)
 //   placing  : a marble that entered the cave is lifted to the rim at the
@@ -18,7 +23,7 @@
 
 import {
   BREAK_CHANCE, CAVE, HAND_HEIGHT, MARBLE_SIZES, PHYSICS, SHOT, START_LINE,
-  hitPoints, sizeSpeedFactor,
+  hitPoints, hitTier, sizeSpeedFactor,
 } from './config.js';
 import { World, createMarble } from './physics.js';
 
@@ -277,10 +282,11 @@ export class Game extends Emitter {
       safeHit: false,
       points: 0,
       powerStripped: false,
-      pointStripped: false,
       caveEntries: [],
       broken: null,
       extraTurn: false,
+      /** The shooter moves again because its marble entered the cave. */
+      caveTurn: false,
       winner: null,
     };
 
@@ -288,20 +294,15 @@ export class Game extends Emitter {
     //    was resting in the cave and is still there afterwards is 'safe': the
     //    touch scores nothing. Knock it out of the cave and it counts fully.
     if (shot.firstHit) {
-      const tier = hitPoints(shot.firstHit.speed);
-      result.hit = { speed: shot.firstHit.speed, tier };
+      result.hit = { speed: shot.firstHit.speed, tier: hitTier(shot.firstHit.speed) };
       result.safeHit = shot.victimInCaveBefore && this.isInCave(victim.marble);
       if (!result.safeHit) {
-        result.points = tier.points;
-        shooter.score += tier.points;
+        result.points = hitPoints(shooter.powered, victim.powered);
+        shooter.score += result.points;
         shooter.hits++;
         if (victim.powered) {
           victim.powered = false;
           result.powerStripped = true;
-          if (victim.score > 0) {
-            victim.score -= 1;
-            result.pointStripped = true;
-          }
         }
       }
       // 2. breakage (glass does not care about the rules)
@@ -335,8 +336,23 @@ export class Game extends Emitter {
       }
     }
 
-    // Extra turn after a scoring hit (unless the shooter's own marble shattered).
-    if (!shot.opening && result.hit && !result.safeHit && shooter.marble.active && !result.winner) result.extraTurn = true;
+    // Who moves next (not during the opening lobs):
+    //   - a marble that entered the cave on this shot moves next, whoever
+    //     owns it (its owner has just won the power)
+    //   - otherwise a counted hit earns the shooter another shot (unless the
+    //     shooter's own marble shattered)
+    //   - otherwise the opponent
+    let next = victim.index;
+    if (!shot.opening && !result.winner) {
+      const victimEntered = this.isInCave(victim.marble) && !shot.victimInCaveBefore;
+      const shooterEntered = this.isInCave(shooter.marble);
+      if (victimEntered) next = victim.index;
+      else if (shooterEntered) {
+        next = shooter.index;
+        result.caveTurn = true;
+      } else if (result.hit && !result.safeHit && shooter.marble.active) next = shooter.index;
+    }
+    result.extraTurn = next === shooter.index;
 
     this.lastResult = result;
     this.history.push(summarise(result));
@@ -370,7 +386,7 @@ export class Game extends Emitter {
       return;
     }
 
-    if (!result.extraTurn) this.current = victim.index;
+    this.current = next;
     this._beginTurn();
   }
 
@@ -407,7 +423,7 @@ export class Game extends Emitter {
     }
     this.phase = 'turn';
     this.emit('phase', { phase: this.phase });
-    this.emit('turn', { player: p, kind: this.shotKind(p), opening: false, extra: this.lastResult?.extraTurn });
+    this.emit('turn', { player: p, kind: this.shotKind(p), opening: false, extra: this.lastResult?.extraTurn, caveTurn: this.lastResult?.caveTurn });
   }
 
   _finishPlacing() {
@@ -417,7 +433,7 @@ export class Game extends Emitter {
     this.phase = 'turn';
     this.emit('phase', { phase: this.phase });
     this.emit('placed', { player });
-    this.emit('turn', { player, kind: this.shotKind(player), opening: false, extra: this.lastResult?.extraTurn });
+    this.emit('turn', { player, kind: this.shotKind(player), opening: false, extra: this.lastResult?.extraTurn, caveTurn: this.lastResult?.caveTurn });
   }
 
   /** A free spot on the cave's rim, facing the opponent if possible. */
@@ -474,6 +490,7 @@ function summarise(r) {
     caveEntries: r.caveEntries.map((c) => c.player.index),
     broken: r.broken ? r.broken.player.index : null,
     extraTurn: r.extraTurn,
+    caveTurn: r.caveTurn,
   };
 }
 

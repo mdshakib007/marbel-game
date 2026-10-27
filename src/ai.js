@@ -156,28 +156,30 @@ function evaluate(kind, player, oppPlayer, o, oppInCaveBefore) {
   const oppPowered = oppPlayer.powered;
   // A touch on a marble that stays in the cave is 'safe' and scores nothing.
   const countedHit = !!o.firstHit && !(oppInCaveBefore && o.oppInCave);
-  const pts = countedHit ? hitPoints(o.firstHit.speed).points : 0;
+  const pts = countedHit ? hitPoints(player.powered, oppPowered) : 0;
   // Power after the shot follows the rules: a counted hit strips it, but a
   // marble resting in the cave at the end has (re)entered and holds it.
   const oppPoweredAfter = o.oppInCave || (oppPowered && !countedHit);
   const mePoweredAfter = player.powered || o.meInCave;
   const stripped = oppPowered && !oppPoweredAfter;
-  const gaveAway = !oppPowered && oppPoweredAfter; // we knocked them in
-  const extraTurn = kind === 'flick' && countedHit;
+  const gaveAway = !oppPowered && oppPoweredAfter; // we knocked them in: they move next, with the power
+  // Next move: whoever entered the cave; else the shooter after a counted hit.
+  const extraTurn = kind === 'flick' && !gaveAway && (o.meInCave || countedHit);
 
   if (!player.powered) {
     // Goal: get the power. Being close to the cave is good; inside is best.
     if (mePoweredAfter) s += 120;
     else s -= 60 * o.dMeCave;
-    if (countedHit) s += 15 * pts + (stripped ? 70 : 0) + (extraTurn ? 25 : 0);
-    if (gaveAway) s -= 80;
+    if (countedHit) s += 40 * pts + (stripped ? 70 : 0);
+    if (extraTurn) s += 30;
+    if (gaveAway) s -= 100;
     if (oppPoweredAfter && !mePoweredAfter) s -= 20 * Math.max(0, 0.6 - o.dMeOpp);
   } else {
-    if (countedHit) s += 30 * pts + (stripped ? 90 : 0) + (extraTurn ? 40 : 0) + 25 * Math.min(1.5, o.dOppCave);
+    if (countedHit) s += 60 * pts + (stripped ? 90 : 0) + 25 * Math.min(1.5, o.dOppCave);
     else s -= 15 * o.dMeOpp;
+    if (extraTurn) s += 40;
     if (gaveAway) s -= 150;
     if (!oppPoweredAfter) s -= 40 * Math.max(0, 0.35 - o.dMeOpp); // they could nudge us and strip the power
-    if (o.meInCave) s -= 5;
   }
   return s;
 }
