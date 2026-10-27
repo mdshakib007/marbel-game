@@ -28,14 +28,32 @@ export class Terrain {
    * @param {object} opts
    * @param {number} opts.seed   integer seed for the bumps
    * @param {number} [opts.cell] grid cell size in metres
-   * @param {number} [opts.bumpAmplitude]
-   * @param {number} [opts.grainAmplitude]
+   * @param {number} [opts.bumpAmplitude]  broad undulations (~0.75 m across)
+   * @param {number} [opts.midAmplitude]   humps and hollows (~0.3 m across)
+   * @param {number} [opts.midScale]       wavelength of those humps (m)
+   * @param {number} [opts.grainAmplitude] pebbles and footprints (~7 cm)
+   * @param {number} [opts.maxSlope]       steepest base slope allowed (tan); the
+   *   bumps are scaled down for seeds that would exceed it, so a marble can
+   *   always come to rest (it rests where tan(theta) < 1.4 x rolling resistance)
    */
-  constructor({ seed = 1, cell = 0.004, bumpAmplitude = 0.0055, grainAmplitude = 0.0005 } = {}) {
+  constructor({
+    seed = 1,
+    cell = 0.004,
+    bumpAmplitude = 0.015,
+    midAmplitude = 0.0078,
+    midScale = 0.36,
+    grainAmplitude = 0.001,
+    maxSlope = 0.145,
+  } = {}) {
     this.seed = seed >>> 0;
     this.cell = cell;
     this.bumpAmplitude = bumpAmplitude;
+    this.midAmplitude = midAmplitude;
+    this.midScale = midScale;
     this.grainAmplitude = grainAmplitude;
+    this.maxSlope = maxSlope;
+    /** Scale applied to all bumps (reduced when a seed is too steep). */
+    this.roughness = 1;
     this.cave = CAVE;
     this.field = FIELD;
 
@@ -44,8 +62,14 @@ export class Terrain {
     this.nx = Math.ceil((FIELD.xMax - FIELD.xMin + 2 * GRID_MARGIN) / cell) + 1;
     this.nz = Math.ceil((FIELD.zMax - FIELD.zMin + 2 * GRID_MARGIN) / cell) + 1;
     this.grid = new Float32Array(this.nx * this.nz);
-    this._bake();
     this._tmp = { h: 0, gx: 0, gz: 0 };
+    this._bake();
+    for (let i = 0; i < 4; i++) {
+      const worst = this.maxBaseSlope();
+      if (worst <= this.maxSlope) break;
+      this.roughness *= (this.maxSlope / worst) * 0.98;
+      this._bake();
+    }
   }
 
   /** The smooth base surface (bumps + wear dish), without the cave hole. */
@@ -57,17 +81,22 @@ export class Terrain {
 
     // Broad undulations of the yard.
     let bumps = this.bumpAmplitude * fbm2(x / 0.75, z / 0.75, seed, 3, 2.0, 0.45);
+    // Humps and hollows a hand-span across: these are what send a long roll
+    // off its line, so a hit from far away is never a sure thing.
+    const ml = this.midScale;
+    let mid = this.midAmplitude * fbm2(x / ml + 11.3, z / ml - 4.1, seed + 3, 2, 2.0, 0.5);
     // Fine grain: pebbles and footprints.
     const grain = this.grainAmplitude * fbm2(x / 0.07, z / 0.07, seed + 7, 2, 2.0, 0.5);
     // The ground near the cave is worn smoother by years of play.
-    const wear = smoothstep(Math.min(1, d / 0.35));
+    const wear = smoothstep(Math.min(1, d / 0.45));
     bumps *= 0.45 + 0.55 * wear;
+    mid *= 0.25 + 0.75 * wear;
 
     // Shallow dish around the cave.
     const t = Math.min(1, d / CAVE.dishRadius);
     const dish = -CAVE.dishDepth * (1 - t) * (1 - t) * (1 + 2 * t);
 
-    return bumps + grain + dish;
+    return (bumps + mid + grain) * this.roughness + dish;
   }
 
   _bake() {

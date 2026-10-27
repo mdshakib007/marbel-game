@@ -11,11 +11,12 @@ const PERFECT = { ...AI_LEVELS.hard, dirNoise: 0, powerNoise: 0, blunder: 0 };
 
 const terrain = new Terrain({ seed: 42 });
 
-function makeGame({ targetScore = null, rng = createRng(1) } = {}) {
+function makeGame({ targetScore = null, rng = createRng(1), scatter = 0 } = {}) {
   const game = new Game({
     terrain,
     rng,
     targetScore,
+    scatter, // exact shots by default so the rules tests are deterministic
     players: [
       { name: 'You', isAI: false, size: 'medium', style: 'catseye', color: 'blue' },
       { name: 'Computer', isAI: true, size: 'medium', style: 'swirl', color: 'red', aiLevel: 'hard' },
@@ -310,4 +311,22 @@ test('AI: opening throw lands near the cave', () => {
   game.shoot(plan);
   settle(game);
   assert.ok(game.distanceToCave(ai.marble) < 0.3, `AI throw ended ${game.distanceToCave(ai.marble)} from the cave`);
+});
+
+test('flicks scatter a little (more for a hard flick), lobs do not', () => {
+  const angles = [];
+  for (let seed = 1; seed <= 40; seed++) {
+    const game = makeGame({ rng: createRng(seed), scatter: 1 });
+    midGame(game, { x: 0, z: 1.6 }, { x: 0.5, z: 0.4 }, 0);
+    game.players[0].powered = true;
+    game.shoot({ dirX: 0, dirZ: -1, power: 1 });
+    const m = game.players[0].marble;
+    angles.push(Math.atan2(m.vx, -m.vz));
+  }
+  const rms = Math.sqrt(angles.reduce((s, a) => s + a * a, 0) / angles.length) * (180 / Math.PI);
+  assert.ok(rms > 0.8 && rms < 4, `full-power scatter rms ${rms.toFixed(2)} deg`);
+  const game = makeGame({ rng: createRng(1), scatter: 1 });
+  game.start();
+  game.shoot({ dirX: 0, dirZ: -1, power: 0.8, elevation: 45 });
+  assert.equal(game.players[0].marble.vx, 0, 'a lob is not scattered');
 });

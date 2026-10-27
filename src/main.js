@@ -6,7 +6,7 @@ import { AI_LEVELS, CAVE, MARBLE_COLORS, MARBLE_SIZES, MARBLE_STYLES, SHOT, STAR
 import { Terrain } from './terrain.js';
 import { Game } from './game.js';
 import { planShot } from './ai.js';
-import { LAYER_MINIMAP, buildScene, createRenderer } from './render/scene.js';
+import { LAYER_MINIMAP, buildScene, createRenderer, fadeWalls } from './render/scene.js';
 import { MarbleView } from './render/marbles.js';
 import { Effects } from './render/effects.js';
 import { AimGuide } from './render/aim.js';
@@ -72,6 +72,7 @@ class App {
     const parts = buildScene(this.renderer, this.terrain);
     this.scene = parts.scene;
     this.minimap = parts.minimap;
+    this.walls = parts.walls;
     this.effects = new Effects(this.scene, this.terrain);
     this.aim = new AimGuide(this.scene, this.terrain);
     if (this.rig) this.rig.terrain = this.terrain;
@@ -135,12 +136,11 @@ class App {
       this.previewView.dispose();
       this.previewView = null;
     }
-    // The computer picks its own marble: a different colour and (usually) a
-    // different style, mostly the popular medium size.
+    // The computer plays a marble of the same size as yours (a fair match)
+    // in a different colour and (usually) a different style.
     const colors = Object.keys(MARBLE_COLORS).filter((c) => c !== values.color);
     const styles = Object.keys(MARBLE_STYLES).filter((s) => s !== values.style);
-    const r = Math.random();
-    const aiSize = r < 0.65 ? 'medium' : r < 0.85 ? 'small' : 'big';
+    const aiSize = values.size;
     const players = [
       { name: values.name, isAI: false, size: values.size, style: values.style, color: values.color, handX: -0.12 },
       {
@@ -529,6 +529,7 @@ class App {
       this._advanceAI(dt);
       this._syncViews(dt);
       this._rollingSounds();
+      this._followAction();
       if (DEBUG) this._debugText();
     } else if (this.state === 'setup' && this.previewView) {
       this.previewView.spin(dt, 0.7);
@@ -538,6 +539,7 @@ class App {
     this.aim.update(dt);
     this.effects.update(dt);
     this.rig.update(dt, aspect);
+    fadeWalls(this.walls, this.camera.position, this.rig.target, dt);
     this._render();
   }
 
@@ -570,6 +572,26 @@ class App {
         v.setVisible(false);
       }
     }
+  }
+
+  /** While marbles move, keep the camera on the fastest one (the action). */
+  _followAction() {
+    const g = this.game;
+    if (g.phase !== 'shot' || !this.rig.followTarget) return;
+    let best = null;
+    let bestSpeed = 0;
+    for (const p of g.players) {
+      const m = p.marble;
+      if (!m.active || m.asleep) continue;
+      const sp = Math.hypot(m.vx, m.vz);
+      if (sp > bestSpeed) {
+        best = m;
+        bestSpeed = sp;
+      }
+    }
+    const cur = this.rig.followTarget;
+    const curSpeed = cur.asleep ? 0 : Math.hypot(cur.vx, cur.vz);
+    if (best && best !== cur && bestSpeed > curSpeed * 1.3 + 0.05) this.rig.follow(best);
   }
 
   _rollingSounds() {

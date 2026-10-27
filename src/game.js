@@ -50,12 +50,14 @@ export class Game extends Emitter {
    * @param {Array<{name:string,isAI:boolean,size:string,style:string,color:string,aiLevel?:string}>} opts.players
    * @param {number|null} opts.targetScore  null = just for fun
    * @param {() => number} [opts.rng]
+   * @param {number} [opts.scatter]  flick launch scatter, 1 = as configured, 0 = exact shots (tests)
    */
-  constructor({ terrain, players, targetScore = null, rng = Math.random, world = null }) {
+  constructor({ terrain, players, targetScore = null, rng = Math.random, world = null, scatter = 1 }) {
     super();
     this.terrain = terrain;
     this.world = world || new World(terrain);
     this.rng = rng;
+    this.scatter = scatter;
     this.targetScore = targetScore;
     this.phase = 'setup';
     this.current = 0;
@@ -183,9 +185,16 @@ export class Game extends Emitter {
       this.world.launch(m, dirX * horiz, speed * Math.sin(el), dirZ * horiz, origin);
       player.inHand = false;
     } else {
+      // Launch scatter: a finger flick never leaves exactly along the aim.
+      const sigma = (this.scatter * (SHOT.scatterBase + SHOT.scatterPerPower * power) * Math.PI) / 180;
+      const ang = sigma > 0 ? gaussian(this.rng) * sigma : 0;
+      const cs = Math.cos(ang);
+      const sn = Math.sin(ang);
+      const fx = dirX * cs - dirZ * sn;
+      const fz = dirX * sn + dirZ * cs;
       // A finger strikes slightly below the marble's centre line: a small hop.
       this.world.wake(m);
-      this.world.launch(m, dirX * speed * 0.998, speed * 0.06, dirZ * speed * 0.998);
+      this.world.launch(m, fx * speed * 0.998, speed * 0.06, fz * speed * 0.998);
     }
     this.world.wakeNear(m.x, m.z, 0.05, m);
 
@@ -470,4 +479,12 @@ function summarise(r) {
 
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
+}
+
+function gaussian(rng) {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }

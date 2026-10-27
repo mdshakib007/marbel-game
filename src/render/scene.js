@@ -35,8 +35,10 @@ export function buildScene(renderer, terrain) {
   const hemi = new THREE.HemisphereLight(0xd6e9ff, 0x7a5a3a, 0.7);
   scene.add(hemi);
 
+  // A lowish afternoon sun: raking light shows the humps and hollows of the
+  // dirt, which a high sun flattens out.
   const sun = new THREE.DirectionalLight(0xfff2dd, 2.6);
-  sun.position.set(2.2, 4.2, 1.6);
+  sun.position.set(2.6, 2.7, 1.4);
   sun.target.position.set(0, 0, 0.6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(4096, 4096);
@@ -186,29 +188,69 @@ function buildWalls() {
   const h = FIELD.wallHeight + 0.04;
   const t = FIELD.wallThickness;
   const y = -0.04 + h / 2;
-  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 });
   const lenX = FIELD.xMax - FIELD.xMin + 2 * t;
   const lenZ = FIELD.zMax - FIELD.zMin;
-  const make = (w, d, x, z, rotY) => {
+  // Each wall gets its own material so the one between the camera and the
+  // marble can be faded on its own.
+  const make = (w, d, x, z, rotY, side) => {
     const geo = new THREE.BoxGeometry(w, h, d);
     // scale brick UVs so bricks stay ~6 cm long on every face
     const uv = geo.attributes.uv;
     for (let i = 0; i < uv.count; i++) {
       uv.setXY(i, uv.getX(i) * (w / 0.5), uv.getY(i) * (h / 0.25));
     }
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 });
     const m = new THREE.Mesh(geo, mat);
     m.position.set(x, y, z);
     m.rotation.y = rotY;
     m.castShadow = true;
     m.receiveShadow = true;
+    m.name = `wall-${side}`;
+    m.userData.side = side;
+    m.userData.fade = 0;
     group.add(m);
   };
   const zc = (FIELD.zMin + FIELD.zMax) / 2;
-  make(lenX, t, 0, FIELD.zMin - t / 2, 0);
-  make(lenX, t, 0, FIELD.zMax + t / 2, 0);
-  make(lenZ, t, FIELD.xMin - t / 2, zc, Math.PI / 2);
-  make(lenZ, t, FIELD.xMax + t / 2, zc, Math.PI / 2);
+  make(lenX, t, 0, FIELD.zMin - t / 2, 0, 'zMin');
+  make(lenX, t, 0, FIELD.zMax + t / 2, 0, 'zMax');
+  make(lenZ, t, FIELD.xMin - t / 2, zc, Math.PI / 2, 'xMin');
+  make(lenZ, t, FIELD.xMax + t / 2, zc, Math.PI / 2, 'xMax');
   return group;
+}
+
+/**
+ * Fade any wall that stands between the camera and the point it looks at
+ * (a marble lying at the edge of the yard would otherwise hide behind the
+ * bricks). Call once per frame; the fade eases in and out.
+ */
+export function fadeWalls(walls, camPos, target, dt) {
+  const top = FIELD.wallHeight;
+  for (const wall of walls.children) {
+    const side = wall.userData.side;
+    let want = 0;
+    let f = 0; // fraction along target->camera where the sight line meets the wall plane
+    if (side === 'xMin' && camPos.x < FIELD.xMin) f = (FIELD.xMin - target.x) / (camPos.x - target.x);
+    else if (side === 'xMax' && camPos.x > FIELD.xMax) f = (FIELD.xMax - target.x) / (camPos.x - target.x);
+    else if (side === 'zMin' && camPos.z < FIELD.zMin) f = (FIELD.zMin - target.z) / (camPos.z - target.z);
+    else if (side === 'zMax' && camPos.z > FIELD.zMax) f = (FIELD.zMax - target.z) / (camPos.z - target.z);
+    if (f > 0 && f < 1) {
+      const yCross = target.y + f * (camPos.y - target.y);
+      // Fully faded when the sight line passes through the brick, easing
+      // back to solid as it rises a few centimetres above the top.
+      want = 1 - Math.min(1, Math.max(0, (yCross - top) / 0.04));
+    }
+    const k = 1 - Math.exp(-8 * dt);
+    wall.userData.fade += (want - wall.userData.fade) * k;
+    const fade = wall.userData.fade;
+    const transparent = fade > 0.01;
+    if (wall.material.transparent !== transparent) {
+      wall.material.transparent = transparent;
+      wall.material.needsUpdate = true; // the shader program depends on it
+    }
+    wall.material.opacity = 1 - 0.8 * fade;
+    wall.material.depthWrite = fade < 0.5;
+    wall.castShadow = fade < 0.5;
+  }
 }
 
 function buildStartLine(terrain) {

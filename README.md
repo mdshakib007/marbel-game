@@ -55,6 +55,10 @@ let the computer play both sides, slow motion).
 | Lob angle (opening throw) | mouse wheel while aiming, or ↑ / ↓ | slider |
 | Position on the line | slider | slider |
 | Look around | drag anywhere else, or right-drag; ← → to orbit | one-finger drag |
+
+The camera may stand outside the low brick wall, so a marble lying at the
+edge of the yard is still framed from behind; a wall that would block the
+view fades out.
 | Zoom | mouse wheel, + / − | pinch |
 | Top view | T or the top-view button | button |
 | Sound | M or the speaker button | button |
@@ -64,24 +68,37 @@ let the computer play both sides, slow motion).
 
 Three sizes — small (13 mm), medium (16 mm, the popular one) and big
 (25 mm). Bigger marbles are heavier: they hit harder and are harder to move,
-but a finger flicks them a little slower. Five glass styles (cat's eye, swirl,
-galaxy, clear, opal) in eight colours.
+but a finger flicks them a little slower. The computer always plays a marble
+of the same size as yours, so the match is fair. Five glass styles (cat's
+eye, swirl, galaxy, clear, opal) in eight colours.
 
 ## Physics notes
 
 - Marbles are solid glass spheres with real mass (`4/3 π r³ × 2500 kg/m³`),
   linear velocity and spin.
 - The yard is an uneven heightfield (seeded noise, choose a different "yard"
-  in the setup) with a worn dish around the cave; the cave is an analytic bowl
-  one inch deep. A marble of radius `r` rolls on the offset surface of the
-  terrain, so a big marble sits higher in the cave than a small one.
+  in the setup): broad undulations, hand-span humps and hollows, and fine
+  grain, all worn smoother near the cave; the cave is an analytic bowl one
+  inch deep. The humps are what make a long shot a gamble: a full-power roll
+  across the yard drifts a few centimetres off its line, more or less
+  depending on the lie, so hitting from far away is never a sure thing. Bumps
+  are scaled so no slope exceeds what a marble can rest on. A marble of
+  radius `r` rolls on the offset surface of the terrain, so a big marble sits
+  higher in the cave than a small one.
 - Rolling resistance, kinetic friction during sliding (a flicked marble skids
   for a few centimetres before it rolls), quadratic air drag, restitution and
   "plowing" losses when a lobbed marble lands on dirt, marble–marble impulses
   with restitution and friction, brick walls around the yard.
-- Everything is deterministic; the computer plans its shots by simulating
-  candidate flicks with the very same code and then adds a human-like aiming
-  error depending on the difficulty.
+- A flick never leaves exactly along the aim: every flick, yours or the
+  computer's, scatters by a small random angle (about half a degree for a
+  gentle nudge, two degrees at full power), on top of whatever the ground
+  does to it afterwards. Lobs are not scattered.
+- Everything else is deterministic; the computer plans its shots by
+  simulating candidate flicks with the very same code and then adds a
+  human-like aiming error depending on the difficulty.
+- While marbles move the camera follows the fastest one, looking a little
+  ahead of it and backing off with speed, so a hard hit and the marble it
+  sends flying stay in view.
 
 ## Project layout
 

@@ -16,12 +16,14 @@ export class AimGuide {
 
     // flick arrow: shaft (box along +x) + a flat triangular head
     this.arrow = new THREE.Group();
-    this.arrowMat = new THREE.MeshBasicMaterial({ color: 0x7be07b, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide });
-    this.shaft = new THREE.Mesh(new THREE.BoxGeometry(1, 0.002, 0.008), this.arrowMat);
+    // See-through and short, so it shows the direction and the strength
+    // without covering the yard between you and a far-away target.
+    this.arrowMat = new THREE.MeshBasicMaterial({ color: 0x7be07b, transparent: true, opacity: 0.42, depthTest: false, side: THREE.DoubleSide });
+    this.shaft = new THREE.Mesh(new THREE.BoxGeometry(1, 0.002, 0.006), this.arrowMat);
     const tri = new THREE.Shape();
-    tri.moveTo(0, -0.016);
-    tri.lineTo(0.034, 0);
-    tri.lineTo(0, 0.016);
+    tri.moveTo(0, -0.012);
+    tri.lineTo(0.026, 0);
+    tri.lineTo(0, 0.012);
     tri.closePath();
     const headGeo = new THREE.ShapeGeometry(tri);
     headGeo.rotateX(-Math.PI / 2);
@@ -97,7 +99,9 @@ export class AimGuide {
   }
 
   showFlick({ origin, dirX, dirZ, power, radius }) {
-    const len = 0.035 + 0.3 * power;
+    // Grows with the pull but tops out at a hand-span: a hard flick's reach
+    // is for you to judge, not for the arrow to measure out.
+    const len = 0.03 + 0.11 * Math.sqrt(power);
     this.arrow.visible = true;
     this.arrow.position.set(origin.x, origin.y - radius + 0.004, origin.z);
     this.arrow.rotation.y = Math.atan2(-dirZ, dirX);

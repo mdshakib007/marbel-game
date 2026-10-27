@@ -28,10 +28,42 @@ function run(world, seconds, onStep) {
   return events;
 }
 
-test('terrain: bumps are gentler than the static friction angle', () => {
-  const slope = terrain.maxBaseSlope();
-  assert.ok(slope < PHYSICS.staticFriction, `max slope ${slope.toFixed(4)} >= ${PHYSICS.staticFriction}`);
-  assert.ok(slope > 0.01, 'surface should not be flat');
+test('terrain: bumps are steep enough to matter but a marble can always rest', () => {
+  // A rolling marble stops on any slope flatter than 1.4 x rolling resistance.
+  const restLimit = 1.4 * PHYSICS.rollingResistance;
+  assert.ok(PHYSICS.staticFriction < restLimit);
+  for (const seed of [1, 7, 42, 1234, 31337, 99999]) {
+    const t = new Terrain({ seed });
+    const slope = t.maxBaseSlope();
+    assert.ok(slope <= t.maxSlope + 1e-6, `seed ${seed}: max slope ${slope.toFixed(4)} > ${t.maxSlope}`);
+    assert.ok(slope < restLimit, `seed ${seed}: max slope ${slope.toFixed(4)} >= ${restLimit}`);
+    assert.ok(slope > 0.06, `seed ${seed}: surface too flat (${slope.toFixed(4)})`);
+  }
+});
+
+test('terrain: a long roll drifts off its line by centimetres', () => {
+  // Shots from far away must be a gamble: measure the sideways drift of a
+  // straight full-power flick across the yard, averaged over several lies.
+  let total = 0;
+  let n = 0;
+  for (const seed of [1, 7, 42, 1234]) {
+    const t = new Terrain({ seed });
+    for (const x0 of [-0.8, -0.4, 0.3, 0.7]) {
+      const w = new World(t);
+      const m = w.addMarble(createMarble({ radius: R }));
+      w.placeOnGround(m, x0, 2.0);
+      w.wake(m);
+      w.launch(m, 0, 2.7 * 0.06, -2.7 * 0.998);
+      w.runToRest(14);
+      assert.ok(m.asleep, `seed ${seed} x ${x0}: marble never came to rest`);
+      assert.ok(m.z < 0.9, `seed ${seed} x ${x0}: rolled only to z=${m.z.toFixed(2)}`);
+      total += Math.abs(m.x - x0);
+      n++;
+    }
+  }
+  const avg = total / n;
+  assert.ok(avg > 0.015, `average drift ${(avg * 1000).toFixed(1)} mm is too predictable`);
+  assert.ok(avg < 0.06, `average drift ${(avg * 1000).toFixed(1)} mm is wild`);
 });
 
 test('terrain: cave bowl depth and continuity', () => {

@@ -83,7 +83,11 @@ export class InputController {
     this.audio && this.audio.unlock();
     this.onInteract && this.onInteract();
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    this.canvas.setPointerCapture(e.pointerId);
+    try {
+      this.canvas.setPointerCapture(e.pointerId);
+    } catch {
+      /* synthetic pointer: nothing to capture */
+    }
     if (this.pointers.size === 2) {
       // pinch starts: cancel aim/orbit
       this.cancel();

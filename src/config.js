@@ -47,7 +47,7 @@ export const PHYSICS = {
   /** Rolling resistance coefficient of a glass marble on packed dirt. */
   rollingResistance: 0.11,
   /** Extra speed-dependent rolling loss (1/m): the marble hops over grains. */
-  rollingDragQuad: 0.25,
+  rollingDragQuad: 0.1,
   /** Kinetic friction glass-on-dirt while the marble slides (before it rolls). */
   rollingFriction: 0.5,
   /** Tangential speed lost on a hard landing: 1/(1 + plowFactor * impactSpeed). */
@@ -66,8 +66,12 @@ export const PHYSICS = {
   marbleFriction: 0.08,
   /** Speed below which a grounded marble on a gentle slope goes to sleep. */
   sleepSpeed: 0.012,
-  /** Static friction: slopes shallower than atan(0.1) ~ 5.7 deg hold a marble. */
-  staticFriction: 0.1,
+  /**
+   * Slopes shallower than atan(0.13) ~ 7.4 deg hold a resting marble. Must stay
+   * below 1.4 x rollingResistance, the slope a rolling marble no longer climbs
+   * down on its own in this model.
+   */
+  staticFriction: 0.13,
   /** Safety: a shot is forced to rest after this many seconds. */
   maxShotTime: 16,
 };
@@ -76,7 +80,7 @@ export const SHOT = {
   /** Max launch speed (m/s, medium marble) for a flick WITHOUT the power. */
   flickWeakMax: 1.3,
   /** Max launch speed (m/s, medium marble) for a flick WITH the power. */
-  flickPowerMax: 2.7,
+  flickPowerMax: 3.2,
   /** Max launch speed (m/s, medium marble) for the opening lob. */
   throwMax: 5.4,
   throwAngleDefault: 45,
@@ -85,6 +89,13 @@ export const SHOT = {
   /** Drag distance in screen pixels that reaches full power. */
   fullPowerPixels: 230,
   minPower: 0.04,
+  /**
+   * A finger is not a machine and the marble leaves a dimpled lie: every
+   * flick (human or computer) scatters by a random angle, 1 sigma in degrees,
+   * scatterBase + scatterPerPower * power. A hard flick is harder to aim.
+   */
+  scatterBase: 0.5,
+  scatterPerPower: 1.5,
 };
 
 /**
