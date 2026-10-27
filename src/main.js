@@ -122,13 +122,23 @@ class App {
     this.input.setEnabled(false);
     this.aim.hide();
     this.aim.clearHighlight();
-    for (const v of this.views) v.removeFrom(this.scene);
-    this.views = [];
+    this._clearViews();
     this.game = null;
     this.ui.showHud(false);
     this.ui.showSetup();
     this.ui.setDebugText('');
     this._updatePreview(this.ui.setupValues(), true);
+  }
+
+  _clearViews() {
+    for (const v of this.views) {
+      v.removeFrom(this.scene);
+      v.dispose();
+    }
+    this.views = [];
+    this.lastPositions.clear();
+    this.shadowDirty = true;
+    this.minimapDirty = true;
   }
 
   _updatePreview(values, immediate = false) {
@@ -163,6 +173,9 @@ class App {
   _startGame(values) {
     this.lastSetup = values;
     if (values.seed !== this.seed) this._buildWorld(values.seed);
+    // A rematch starts here without passing through the setup screen: take
+    // the previous game's marbles off the yard first.
+    this._clearViews();
     if (this.previewView) {
       this.previewView.removeFrom(this.scene);
       this.previewView.dispose();
